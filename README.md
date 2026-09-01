@@ -15,6 +15,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
   - [SC Version](#sc-version)
+- [Example workflows](#example-workflows)
 - [Conventions](#conventions)
 - [Versioning](#versioning)
 - [Licence](#licence)
@@ -97,6 +98,21 @@ Displays the version of the running ComfyUI installation and the version of this
 - Both rows are read only under the legacy renderer and under Nodes 2.0.
 - The versions are re-read from the running installation each time the node is created, so a workflow saved against an older version still reports what you are actually running.
 - A workflow containing only this node has nothing to execute, so ComfyUI reports "Prompt has no outputs". Add it alongside the rest of your graph.
+
+---
+
+## Example workflows
+
+The `example_workflows/` directory holds workflows exported straight from ComfyUI. Load one with
+**Workflow → Open**, or drag the `.json` file onto the ComfyUI canvas.
+
+| Workflow | Shows |
+| --- | --- |
+| `sc_version.json` | The **SC Version** node on its own, reporting the running ComfyUI and SouthernComfy versions. |
+
+Because SC Version is purely informational, this workflow has nothing to execute — running it
+reports "Prompt has no outputs", which is expected. It is there to demonstrate the node; drop the
+node into a graph of your own to use it for real.
 
 ---
 
