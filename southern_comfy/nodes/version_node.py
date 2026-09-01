@@ -1,20 +1,24 @@
-"""The ``SC Version`` node: reports host and pack versions."""
+"""The ``SC Version`` node: an at-a-glance report of the running versions."""
 
 from __future__ import annotations
 
-from comfy_api.latest import io, ui
+from comfy_api.latest import io
 
-from ..comfy_runtime import get_comfyui_version
-from ..version import PACK_NAME, PACK_VERSION
+from ..version import PACK_ID
 
 __all__ = ["SCVersion"]
+
+COMFYUI_LABEL = "ComfyUI Version"
+PACK_LABEL = f"{PACK_ID} Version"
 
 
 class SCVersion(io.ComfyNode):
     """Displays the running ComfyUI version and the Southern Comfy version.
 
-    Useful when reporting issues or when a workflow needs to record the exact
-    environment it was authored against.
+    The node is purely informational. It declares no inputs and no outputs, so
+    it never joins the execution graph and costs nothing to keep in a workflow.
+    Its two labelled rows are populated by the ``web/sc_version.js``
+    extension from the ``/southerncomfy/versions`` route.
     """
 
     @classmethod
@@ -24,7 +28,7 @@ class SCVersion(io.ComfyNode):
             display_name="SC Version",
             category="SouthernComfy/utils",
             description=(
-                "Reports the version of the running ComfyUI installation and of "
+                "Displays the version of the running ComfyUI installation and of "
                 "the Southern Comfy node pack."
             ),
             search_aliases=[
@@ -33,27 +37,10 @@ class SCVersion(io.ComfyNode):
                 "about",
             ],
             inputs=[],
-            outputs=[
-                io.String.Output(
-                    "comfyui_version",
-                    display_name="comfyui_version",
-                    tooltip="Version of the running ComfyUI installation.",
-                ),
-                io.String.Output(
-                    "pack_version",
-                    display_name="pack_version",
-                    tooltip="Version of the Southern Comfy node pack.",
-                ),
-            ],
-            is_output_node=True,
+            outputs=[],
         )
 
     @classmethod
     def execute(cls) -> io.NodeOutput:
-        comfyui_version = get_comfyui_version()
-        summary = f"ComfyUI: {comfyui_version}\n{PACK_NAME}: {PACK_VERSION}"
-        return io.NodeOutput(
-            comfyui_version,
-            PACK_VERSION,
-            ui=ui.PreviewText(summary),
-        )
+        # Unreachable in practice: with no outputs the node is never scheduled.
+        return io.NodeOutput()

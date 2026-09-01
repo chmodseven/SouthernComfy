@@ -50,7 +50,10 @@ except ImportError:
 else:
     from typing_extensions import override
 
+    from .southern_comfy.api import register_routes
     from .southern_comfy.nodes import NODE_CLASSES
+
+    register_routes()
 
     class SouthernComfyExtension(ComfyExtension):
         """Exposes the pack's nodes to ComfyUI's V3 extension loader."""

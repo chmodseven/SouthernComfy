@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from .version import PACK_NAME, PACK_VERSION
+from .version import PACK_ID, PACK_NAME, PACK_VERSION
 
-__all__ = ["PACK_NAME", "PACK_VERSION"]
+__all__ = ["PACK_ID", "PACK_NAME", "PACK_VERSION"]

@@ -9,7 +9,12 @@ Versioning follows ``MAJOR.MINOR.ITERATION``.
 
 from __future__ import annotations
 
-__all__ = ["PACK_NAME", "PACK_VERSION"]
+__all__ = ["PACK_ID", "PACK_NAME", "PACK_VERSION"]
 
 PACK_NAME = "Southern Comfy"
+"""Human-readable pack name, used in prose and log messages."""
+
+PACK_ID = "SouthernComfy"
+"""Identifier form of the pack name: repository folder, category root, labels."""
+
 PACK_VERSION = "0.0.1"

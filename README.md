@@ -26,17 +26,13 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - **No third-party dependencies.** The pack targets a stock ComfyUI portable install and the Python standard library. Nodes that wrap another pack detect it at runtime and degrade gracefully if it is absent.
 - **Renderer agnostic.** Nodes render correctly under both the legacy node renderer and Nodes 2.0.
 - **Core look and feel.** Standard widgets, sockets, tooltips, per-node help pages, and the usual bypass/mute/colour behaviour.
-- **Self-contained.** Nothing in this pack patches or monkey-patches ComfyUI internals, so it will not interfere with other custom node packs.
+- **Self-contained.** The pack adds its own nodes, its own HTTP route, and a frontend extension scoped to its own node types. It does not patch ComfyUI internals or alter how other packs behave.
 
 ---
 
 ## Installation
 
-### Option 1 — ComfyUI Manager
-
-Search for **Southern Comfy** in ComfyUI Manager and install it, then restart ComfyUI.
-
-### Option 2 — Git clone
+### Git clone
 
 From your ComfyUI installation's `custom_nodes` directory:
 
@@ -45,6 +41,10 @@ git clone https://github.com/chmodseven/SouthernComfy.git
 ```
 
 Then restart ComfyUI. The folder must be named `SouthernComfy`.
+
+### ComfyUI Manager
+
+Not yet published to the ComfyUI Registry. Use the git clone above for now.
 
 ### Updating
 
@@ -62,7 +62,7 @@ Then restart ComfyUI.
 
 | | |
 | --- | --- |
-| **ComfyUI** | A recent release providing the V3 node schema API (`comfy_api.latest`). |
+| **ComfyUI** | A recent release providing the V3 node schema API (`comfy_api.latest`). Tested against 0.34.0 (frontend 1.51.9). |
 | **Python** | 3.10 or newer (matching ComfyUI's own requirement). |
 | **Dependencies** | None. |
 
@@ -74,33 +74,29 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 | Node | Category | Summary |
 | --- | --- | --- |
-| [**SC Version**](#sc-version) | `SouthernComfy/utils` | Reports the running ComfyUI version and the Southern Comfy pack version. |
+| [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the Southern Comfy pack version. |
 
 ---
 
 ### SC Version
 
-Reports the version of the running ComfyUI installation and the version of this node pack. Handy when filing an issue, or when a workflow needs to record the exact environment it was authored against.
+Displays the version of the running ComfyUI installation and the version of this node pack, on two labelled rows. Handy when filing an issue, or for confirming which versions a workflow was authored against.
 
-The versions are read from the live ComfyUI process at execution time, so the node always reflects the installation it is actually running in. The summary is drawn on the node body, so no downstream connection is required — but both values are also available as `STRING` outputs for use elsewhere in a workflow.
+![The SC Version node](assets/images/sc-version.png)
 
-<!-- Screenshot pending: save as assets/images/sc-version.png and restore the image line below. -->
-> **Screenshot pending** — an example workflow image for this node will be added at
-> `assets/images/sc-version.png`.
+| Row | Meaning |
+| --- | --- |
+| **ComfyUI Version** | Version of the running ComfyUI installation, e.g. `0.34.0`. |
+| **SouthernComfy Version** | Version of the installed Southern Comfy node pack, e.g. `0.0.1`. |
 
-**Inputs** — none.
-
-**Outputs**
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `comfyui_version` | `STRING` | Version of the running ComfyUI installation, e.g. `0.33.4`. Falls back to `unknown` if it cannot be determined. |
-| `pack_version` | `STRING` | Version of the Southern Comfy node pack, e.g. `0.0.1`. |
+**Inputs and outputs** — none. The node is purely informational, so it never joins the execution graph and costs nothing to leave in a workflow.
 
 **Notes**
 
-- The node is an output node, so it executes even when nothing is connected to it.
-- Results are cached for the lifetime of the ComfyUI process, since a running installation cannot change its own version.
+- The values appear as soon as the node is added; there is no need to run the workflow.
+- Both rows are read only under the legacy renderer and under Nodes 2.0.
+- The versions are re-read from the running installation each time the node is created, so a workflow saved against an older version still reports what you are actually running.
+- A workflow containing only this node has nothing to execute, so ComfyUI reports "Prompt has no outputs". Add it alongside the rest of your graph.
 
 ---
 
@@ -113,7 +109,9 @@ These conventions apply to every node in the pack.
 | **Display name** | Prefixed `SC`, e.g. `SC Version`. |
 | **Node ID** | Prefixed `SC_`, e.g. `SC_Version`. Never changed after release, so saved workflows keep working. |
 | **Category** | Rooted at `SouthernComfy`, with a sub-category by purpose, e.g. `SouthernComfy/utils`. |
+| **Socket names** | Inputs are lower case (`image`, `strength`); outputs are UPPER CASE (`IMAGE`, `LATENT`), matching core ComfyUI. |
 | **Help pages** | Each node ships a markdown help page, reachable from the node's help button in ComfyUI. |
+| **Screenshots** | Captured with the legacy node renderer, for a consistent look across the documentation. Nodes are tested under both renderers regardless. |
 | **Third-party wrappers** | Nodes that wrap another pack check for it at import time and are only registered when it is present. |
 
 ---

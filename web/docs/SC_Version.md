@@ -1,25 +1,26 @@
 # SC Version
 
-Reports the version of the running ComfyUI installation and the version of the
-Southern Comfy node pack.
+Displays the version of the running ComfyUI installation and the version of the
+Southern Comfy node pack, on two labelled rows:
 
-The versions are read from the live ComfyUI process at execution time, so the
-node always reflects the installation it is actually running in. The result is
-also drawn on the node body, so no downstream connection is required.
+| Row | Meaning |
+| --- | --- |
+| **ComfyUI Version** | Version of the running ComfyUI installation, e.g. `0.34.0`. |
+| **SouthernComfy Version** | Version of the installed Southern Comfy node pack, e.g. `0.0.1`. |
 
-## Inputs
+Useful when filing an issue, or for confirming which versions a workflow was
+authored against.
 
-This node has no inputs.
+## Inputs and outputs
 
-## Outputs
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `comfyui_version` | `STRING` | Version of the running ComfyUI installation, e.g. `0.33.4`. Falls back to `unknown` if it cannot be determined. |
-| `pack_version` | `STRING` | Version of the Southern Comfy node pack, e.g. `0.0.1`. |
+This node has none. It is purely informational, so it never joins the execution
+graph and costs nothing to leave in a workflow.
 
 ## Notes
 
-- The node is an output node, so it executes even when nothing is connected to it.
-- Results are cached for the lifetime of the ComfyUI process, since a running
-  installation cannot change its own version.
+- The values appear as soon as the node is added; no need to run the workflow.
+- Both rows are read only, and are re-read from the running installation every
+  time the node is created, so a workflow saved on an older version still
+  reports the version you are actually running.
+- A workflow containing only this node has nothing to execute, so ComfyUI will
+  report "Prompt has no outputs". Add it alongside the rest of your graph.
