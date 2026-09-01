@@ -1,0 +1,32 @@
+[project]
+name = "southerncomfy"
+description = "Southern Comfy - a supplemental pack of quality-of-life custom nodes for ComfyUI."
+# Keep this in sync with southern_comfy/version.py (the runtime source of truth).
+version = "0.0.1"
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/chmodseven/SouthernComfy"
+
+[tool.comfy]
+PublisherId = "chmodseven"
+DisplayName = "Southern Comfy"
+Icon = ""
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RET", "ARG", "C4", "PL"]
+ignore = [
+    # The package directory must be named "SouthernComfy": ComfyUI resolves
+    # custom node packs by folder name and serves web assets under it.
+    "N999",
+    # Host ComfyUI modules are imported lazily and defensively, so a module that
+    # is absent on an older install degrades to a fallback rather than failing
+    # this pack at import time.
+    "PLC0415",
+]
