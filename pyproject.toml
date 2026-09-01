@@ -1,6 +1,6 @@
 [project]
 name = "southerncomfy"
-description = "Southern Comfy - a supplemental pack of quality-of-life custom nodes for ComfyUI."
+description = "SouthernComfy - a supplemental pack of quality-of-life custom nodes for ComfyUI."
 # Keep this in sync with southern_comfy/version.py (the runtime source of truth).
 version = "0.0.1"
 license = { file = "LICENSE" }
@@ -13,7 +13,7 @@ Repository = "https://github.com/chmodseven/SouthernComfy"
 
 [tool.comfy]
 PublisherId = "chmodseven"
-DisplayName = "Southern Comfy"
+DisplayName = "SouthernComfy"
 Icon = ""
 
 [tool.ruff]

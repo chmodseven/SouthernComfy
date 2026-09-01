@@ -72,5 +72,5 @@ def get_comfyui_version() -> str:
         version = resolve()
         if version:
             return str(version)
-    _LOGGER.warning("Southern Comfy could not determine the ComfyUI version.")
+    _LOGGER.warning("SouthernComfy could not determine the ComfyUI version.")
     return UNKNOWN_VERSION

@@ -1,4 +1,4 @@
-"""Southern Comfy - a supplemental pack of custom nodes for ComfyUI.
+"""SouthernComfy - a supplemental pack of custom nodes for ComfyUI.
 
 ComfyUI imports this module directly from ``custom_nodes``. It stays thin on
 purpose: it detects the host's node API and hands registration to

@@ -1,12 +1,12 @@
 # SC Version
 
 Displays the version of the running ComfyUI installation and the version of the
-Southern Comfy node pack, on two labelled rows:
+SouthernComfy node pack, on two labelled rows:
 
 | Row | Meaning |
 | --- | --- |
 | **ComfyUI Version** | Version of the running ComfyUI installation, e.g. `0.34.0`. |
-| **SouthernComfy Version** | Version of the installed Southern Comfy node pack, e.g. `0.0.1`. |
+| **SouthernComfy Version** | Version of the installed SouthernComfy node pack, e.g. `0.0.1`. |
 
 Useful when filing an issue, or for confirming which versions a workflow was
 authored against.

@@ -1,8 +1,8 @@
-# Southern Comfy
+# SouthernComfy
 
 A supplemental pack of quality-of-life custom nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
-Southern Comfy is built to sit alongside a stock ComfyUI installation rather than replace parts of it. Every node follows core ComfyUI conventions for appearance, widgets, sockets, bypass and colour handling, and works under both the legacy LiteGraph renderer and the new **Nodes 2.0** (Vue) renderer.
+SouthernComfy is built to sit alongside a stock ComfyUI installation rather than replace parts of it. Every node follows core ComfyUI conventions for appearance, widgets, sockets, bypass and colour handling, and works under both the legacy LiteGraph renderer and the new **Nodes 2.0** (Vue) renderer.
 
 All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and live under the **SouthernComfy** category.
 
@@ -74,7 +74,7 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 | Node | Category | Summary |
 | --- | --- | --- |
-| [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the Southern Comfy pack version. |
+| [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
 
 ---
 
@@ -87,7 +87,7 @@ Displays the version of the running ComfyUI installation and the version of this
 | Row | Meaning |
 | --- | --- |
 | **ComfyUI Version** | Version of the running ComfyUI installation, e.g. `0.34.0`. |
-| **SouthernComfy Version** | Version of the installed Southern Comfy node pack, e.g. `0.0.1`. |
+| **SouthernComfy Version** | Version of the installed SouthernComfy node pack, e.g. `0.0.1`. |
 
 **Inputs and outputs** — none. The node is purely informational, so it never joins the execution graph and costs nothing to leave in a workflow.
 
@@ -106,6 +106,7 @@ These conventions apply to every node in the pack.
 
 | Aspect | Convention |
 | --- | --- |
+| **Pack name** | Always written **`SouthernComfy`**, one word, never "Southern Comfy". Applies to prose, node labels, help pages and console messages alike. |
 | **Display name** | Prefixed `SC`, e.g. `SC Version`. |
 | **Node ID** | Prefixed `SC_`, e.g. `SC_Version`. Never changed after release, so saved workflows keep working. |
 | **Category** | Rooted at `SouthernComfy`, with a sub-category by purpose, e.g. `SouthernComfy/utils`. |
@@ -118,7 +119,7 @@ These conventions apply to every node in the pack.
 
 ## Versioning
 
-Southern Comfy uses a `MAJOR.MINOR.ITERATION` scheme. The current version is reported by the [SC Version](#sc-version) node.
+SouthernComfy uses a `MAJOR.MINOR.ITERATION` scheme. The current version is reported by the [SC Version](#sc-version) node.
 
 **Current version: `0.0.1`**
 

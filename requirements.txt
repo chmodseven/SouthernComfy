@@ -1,4 +1,4 @@
-# Southern Comfy deliberately ships with no third-party dependencies.
+# SouthernComfy deliberately ships with no third-party dependencies.
 #
 # Every node in this pack is built against the ComfyUI runtime and the Python
 # standard library only. Nodes that wrap a third-party node pack detect that

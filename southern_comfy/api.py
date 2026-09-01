@@ -31,13 +31,13 @@ def register_routes() -> None:
         from aiohttp import web
         from server import PromptServer
     except ImportError:
-        _LOGGER.warning("Southern Comfy could not reach the ComfyUI server; routes disabled.")
+        _LOGGER.warning("SouthernComfy could not reach the ComfyUI server; routes disabled.")
         return
 
     server = getattr(PromptServer, "instance", None)
     routes = getattr(server, "routes", None)
     if routes is None:
-        _LOGGER.warning("Southern Comfy found no ComfyUI route table; routes disabled.")
+        _LOGGER.warning("SouthernComfy found no ComfyUI route table; routes disabled.")
         return
 
     @routes.get(VERSIONS_ROUTE)

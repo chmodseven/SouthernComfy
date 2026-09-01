@@ -1,4 +1,4 @@
-"""Node registry for the Southern Comfy pack.
+"""Node registry for the SouthernComfy pack.
 
 Adding a node means importing its class here and listing it in ``NODE_CLASSES``.
 The package entry point consumes this tuple and nothing else, so registration
