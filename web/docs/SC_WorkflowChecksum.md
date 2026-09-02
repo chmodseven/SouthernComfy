@@ -56,7 +56,7 @@ Set those widgets to `fixed` if you need the displayed and emitted values to agr
 
 ## Deliberately ignored
 
-Three things never affect any scope, because they change for reasons unrelated to the workflow's
+Five things never affect any scope, because they change for reasons unrelated to the workflow's
 content and would otherwise make two identical workflows appear different:
 
 - **Node `properties`**, apart from those SouthernComfy owns. As well as provenance (`ver`,
@@ -69,12 +69,12 @@ content and would otherwise make two identical workflows appear different:
 - **`floatingLinks`** — a link with a dangling end. The two forms a workflow arrives in do not
   always agree on this field, so hashing it would risk the displayed and executed digests
   disagreeing. It cannot affect execution, and removing the real link is caught by `structure`.
-
-Native reroute waypoints and the Parameters-sidebar favourites **are** hashed, as `layout`.
 - **Link ids** — reassigned freely by the frontend when links are rebuilt, without the wiring
   itself changing. The endpoints are hashed instead.
 - **Canvas pan and zoom** — cosmetic in the strictest sense, but it changes merely from looking
   around a workflow, which would leave `layout` never settling.
+
+Native reroute waypoints and the Parameters-sidebar favourites **are** hashed, as `layout`.
 
 An `SC Workflow Checksum` node contributes no values of its own to the `inputs` scope. It observes
 the workflow rather than configuring it, and hashing the digest it displays would make the result

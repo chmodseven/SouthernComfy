@@ -42,10 +42,11 @@ These are excluded from every scope because they change for reasons unrelated to
 the workflow's content, and including them would produce digests that differ
 between two genuinely identical workflows:
 
-* The provenance ``properties`` keys ``ver``, ``cnr_id`` and ``aux_id``, which
-  record the pack and release a node came from. Including them would invalidate
-  every saved checksum the moment a node pack updated. Every other property is
-  kept, and counts as presentation.
+* Every node ``property`` except those this pack owns -- see
+  ``_OWNED_PROPERTY_PREFIX`` for why the field cannot be trusted as a whole.
+  That covers provenance (``ver``, ``cnr_id``, ``aux_id``), which would
+  invalidate every saved checksum the moment a node pack updated, and equally
+  the runtime results some nodes write there after each execution.
 * Link ids -- reassigned freely by the frontend when links are rebuilt, without
   the wiring itself changing. The endpoints are hashed instead.
 * ``extra.ds`` -- the canvas pan and zoom. Cosmetic in the strictest sense, but
@@ -97,14 +98,24 @@ _SHORT_LENGTH = 12
 #: Public because any module reading values out of a workflow needs to make the
 #: same exclusion -- ``southern_comfy.run_inputs`` does.
 #:
-#: A checksum node *displays* the digest it computes, and the frontend writes
-#: that displayed value into ``widgets_values`` even for a widget marked
-#: ``serialize: false``. Hashing it would make the digest self-referential: a
-#: new checksum changes the workflow, which changes the checksum, without end.
 #: These nodes still count structurally -- adding or removing one is a real
-#: change to the graph -- but they contribute no values, because they observe
-#: the workflow rather than configure it.
-OBSERVER_NODE_TYPES = frozenset({"SC_WorkflowChecksum"})
+#: change to the graph -- but they contribute no values, because each observes
+#: or acts on the workflow rather than configuring the run. Both would otherwise
+#: make a digest chase its own tail:
+#:
+#: ``SC_WorkflowChecksum``
+#:     *Displays* the digest it computes, and the frontend writes that displayed
+#:     value into ``widgets_values`` even for a widget marked ``serialize:
+#:     false``. Hashing it would be self-referential -- a new checksum changes
+#:     the workflow, which changes the checksum, without end.
+#:
+#: ``SC_LoadInputs``
+#:     Notes which file it last restored from. That is a record of a UI action,
+#:     not a setting any run uses. Hashing it would mean that restoring a saved
+#:     record changed the very digest being restored towards, so a workflow
+#:     could never match the ``INPUTS`` digest of the file it was restored from
+#:     -- destroying the one property that makes the comparison worth making.
+OBSERVER_NODE_TYPES = frozenset({"SC_WorkflowChecksum", "SC_LoadInputs"})
 
 #: A saved link is ``[link_id, origin_id, origin_slot, target_id, target_slot,
 #: type]``. Anything shorter is not one and is skipped.

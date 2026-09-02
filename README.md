@@ -14,6 +14,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Installation](#installation)
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
+  - [SC Load Inputs](#sc-load-inputs)
   - [SC Save Inputs](#sc-save-inputs)
   - [SC Version](#sc-version)
   - [SC Workflow Checksum](#sc-workflow-checksum)
@@ -79,9 +80,64 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 | Node | Category | Summary |
 | --- | --- | --- |
+| [**SC Load Inputs**](#sc-load-inputs) | `SouthernComfy/utils` | Restores the input values of an earlier run into this workflow. |
 | [**SC Save Inputs**](#sc-save-inputs) | `SouthernComfy/utils` | Writes every input value in the workflow to JSON on each run. |
 | [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
 | [**SC Workflow Checksum**](#sc-workflow-checksum) | `SouthernComfy/utils` | Live checksum of the workflow, over a selectable scope. |
+
+---
+
+### SC Load Inputs
+
+Pastes the values of an earlier run back into this workflow, from a file written by
+[SC Save Inputs](#sc-save-inputs). For returning to settings you liked, flipping between test
+configurations, or undoing an afternoon of fiddling in one click.
+
+> **Screenshot pending.**
+
+Press **load inputs…**, pick a file — they land in `output/runs/` by default — and the values are
+restored. The `run file` row then shows what was last loaded.
+
+**Inputs and outputs** — none. The node never joins the execution graph, and could not do this work
+there if it did: ComfyUI's execution is pull-based, so a node receives its own inputs and has no way
+to write into another node's widgets. The restoring happens in the browser, against the live graph.
+
+**What it restores** — every widget value in the file, matched to its node by **id and type**,
+including nodes inside subgraphs and including `control_after_generate`. Values only: your wiring,
+positions, titles and colours are untouched. That is the difference between this and dragging a
+saved image onto the canvas, which replaces the entire workflow.
+
+**When it refuses** — the file is checked twice, and a refusal changes nothing at all. First, that
+it is one of ours: a stray `.json` from the output folder, or a file from a newer SouthernComfy, is
+refused by name. Second, that it still fits — the file's `structure` checksum against this
+workflow's:
+
+| Since you saved | Result |
+| --- | --- |
+| You edited values | **Fits** — that is the whole point |
+| You moved, resized, recoloured or retitled nodes | **Fits** — none of that is structure |
+| You added, deleted, rewired or bypassed a node | **Refused** — the values no longer line up |
+
+**Afterwards** it reports how many values were restored and anything it could not do: node types
+whose widgets did not match (almost always an uninstalled node pack — ComfyUI substitutes a
+placeholder whose widgets are all named `UNKNOWN`), nodes that were not found or had changed type,
+and any widget that will advance again.
+
+**Notes**
+
+- **A restored seed does not necessarily stay restored.** A widget set to `randomize`, `increment`
+  or `decrement` is advanced by ComfyUI the instant you press Run, replacing the value you just put
+  back — which looks exactly like a restore that silently failed. The node warns you and names the
+  widget; set it to `fixed` if you want the seed you restored to be the seed that runs.
+- The file is read in your browser and never uploaded. The *deciding* is done by the server, so the
+  rules a record is written by and read by are the same rules.
+- This node contributes no values to the `inputs` checksum, and none to a file saved by SC Save
+  Inputs. The file it last loaded is a note about what you did, not a setting a run uses — and
+  counting it would mean a restored workflow could never match the checksum of the file it was
+  restored from.
+- Browsers hand over a file's name but never its path, so the `run file` row cannot be used to
+  reload the same file — press the button again and pick it.
+- Works under both the legacy renderer and Nodes 2.0.
 
 ---
 
@@ -89,7 +145,7 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 Writes every input value in the workflow to a JSON file in the output folder, each time the
 workflow runs — a record of what a run was actually invoked with. Load one back with
-**SC Load Inputs** to return to a run you liked.
+[SC Load Inputs](#sc-load-inputs) to return to a run you liked.
 
 > **Screenshot pending.**
 

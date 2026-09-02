@@ -86,6 +86,9 @@ COMPATIBILITY_SCOPE = "structure"
 #: A prompt input supplied by a link is ``[origin_node_id, origin_slot]``.
 _LINK_FIELDS = 2
 
+#: Digest characters shown when reporting a mismatch; enough to tell two apart.
+_SHORT = 12
+
 
 def _timestamp() -> str:
     """Local time with its UTC offset, so a saved run is readable months later."""
@@ -214,19 +217,22 @@ def validate(payload: Any) -> str | None:
     ``output/`` is as likely to be a prompt, a workflow or something unrelated
     as one of ours, and the failure has to name what is wrong rather than let a
     restore run over half-understood data.
+
+    Every complaint is phrased to follow "This file ...", so a caller can put
+    one in a sentence without reformatting it.
     """
     if not isinstance(payload, dict):
-        return "not a JSON object"
+        return "is not a JSON object"
     if payload.get("format") != FORMAT:
-        return "not a SouthernComfy run inputs file"
+        return "is not a SouthernComfy run inputs file"
 
     version = payload.get("format_version")
     if not isinstance(version, int):
-        return "missing a format version"
+        return "is missing a format version"
     if version > FORMAT_VERSION:
         return (
-            f"written in format version {version}, but this version of "
-            f"SouthernComfy understands up to {FORMAT_VERSION}"
+            f"was written in format version {version}, which is newer than the "
+            f"{FORMAT_VERSION} this version of SouthernComfy understands"
         )
 
     for key, kind, complaint in (
@@ -246,11 +252,17 @@ def describe_mismatch(payload: dict, checksums: dict) -> str | None:
     point -- while a structural difference means the graph is no longer the one
     the values were taken from, and pasting them in would put them on the wrong
     controls or on nothing at all.
+
+    Phrased to follow "This file ...", as ``validate``'s complaints are.
     """
     saved = payload.get("checksums", {}).get(COMPATIBILITY_SCOPE)
     current = checksums.get(COMPATIBILITY_SCOPE)
     if not isinstance(saved, str) or not isinstance(current, str):
-        return "the structure checksum is missing"
+        return "was saved without a structure checksum"
     if saved != current:
-        return f"saved from a different workflow structure ({saved[:12]}... vs {current[:12]}...)"
+        return (
+            "was saved from a workflow with a different structure "
+            f"({saved[:_SHORT]}... rather than {current[:_SHORT]}...). Add, delete or rewire "
+            "nodes to match the workflow it came from, or use a record saved from this one"
+        )
     return None
