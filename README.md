@@ -15,6 +15,9 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
   - [SC Version](#sc-version)
+  - [SC Workflow Checksum](#sc-workflow-checksum)
+- [Enhancements](#enhancements)
+  - [Filtered dropdowns](#filtered-dropdowns)
 - [Example workflows](#example-workflows)
 - [Conventions](#conventions)
 - [Versioning](#versioning)
@@ -76,6 +79,7 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 | Node | Category | Summary |
 | --- | --- | --- |
 | [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
+| [**SC Workflow Checksum**](#sc-workflow-checksum) | `SouthernComfy/utils` | Live checksum of the workflow, over a selectable scope. |
 
 ---
 
@@ -98,6 +102,117 @@ Displays the version of the running ComfyUI installation and the version of this
 - Both rows are read only under the legacy renderer and under Nodes 2.0.
 - The versions are re-read from the running installation each time the node is created, so a workflow saved against an older version still reports what you are actually running.
 - A workflow containing only this node has nothing to execute, so ComfyUI reports "Prompt has no outputs". Add it alongside the rest of your graph.
+
+---
+
+### SC Workflow Checksum
+
+Produces a deterministic checksum of the workflow the node sits in, so you can tell whether a
+workflow, its values, or both have changed. The displayed value updates live as you edit the
+canvas — no run required.
+
+![The SC Workflow Checksum node](assets/images/sc-workflow-checksum.png)
+
+*Screenshot pending.*
+
+| Scope | Covers | Changes when |
+| --- | --- | --- |
+| `everything` | Structure, layout and values | Any change at all |
+| `structure` | Nodes, wiring, bypass/mute state | You add, delete, rewire or bypass a node |
+| `layout` | The above plus positions, sizes, titles, colours, collapsed state and groups | Also when you move, resize, recolour or group nodes |
+| `inputs` | Widget values only | You edit any value — or add/remove a node that had values |
+
+**Output** — `CHECKSUM` (`STRING`), the full SHA-256 hex digest for the selected scope.
+
+The node face shows as much of the digest as fits, trailed by `...` to make clear there is more.
+**Widen the node to reveal more of it**; at full width the whole 64-character digest is shown and
+the `...` disappears. Narrowing it again brings the `...` back. The socket always carries all 64
+characters regardless of how the node is sized.
+
+`structure` is the scope to compare before restoring saved input values into a workflow, because it
+changes precisely when those saved values would no longer line up.
+
+Two behaviours worth knowing about the `inputs` scope:
+
+- It **ignores node identity**. Deleting a node and re-adding an identical one, or packing a
+  selection into a subgraph and unpacking it again, renumbers nodes without changing any value —
+  so the digest returns to exactly what it was. `structure` and `layout` still change, because
+  structurally those really are different graphs.
+- It **reaches inside subgraphs**. Packing nodes away moves them into a subgraph definition; their
+  values keep counting. The subgraph's own instance node is skipped, since the widgets promoted
+  onto it are copies of ones still held by the nodes inside.
+
+
+## Randomised seeds and the run
+
+Any widget set to **randomize** or **increment** — a KSampler seed, typically — is advanced by
+ComfyUI the instant you press Run, *after* the workflow has been submitted. So on any graph with
+such a widget:
+
+- The `inputs` and `everything` scopes change with **every run**, even if you touch nothing.
+- The value shown on the node face is one step **ahead** of the value its output sent downstream.
+  The face describes the workflow as it is now; the output describes the workflow that actually
+  ran — both are correct, they are answering different questions.
+
+Set those widgets to `fixed` if you need the displayed and emitted values to agree. `structure` and
+`layout` are unaffected either way, since a seed is neither wiring nor presentation.
+
+**Notes**
+
+- Some things never affect any scope, because they change for reasons unrelated to the workflow's
+  content: link ids (reassigned freely without the wiring changing), canvas pan/zoom, and the
+  computed execution `order` (ComfyUI recalculates it per run, so it drifts on its own).
+- **Node `properties` are not hashed**, apart from those SouthernComfy owns — such as a saved
+  dropdown filter. `properties` is an unpoliced grab-bag: as well as provenance (`ver`, `cnr_id`)
+  and genuine settings, nodes stash *runtime results* there. Core's Save 3D Model writes the last
+  saved filename and a live camera position after every execution, which would otherwise change
+  `layout` on every single run without you touching anything. Everything a node actually presents
+  — position, size, title, colour, collapsed state, groups — has its own field and is hashed
+  from there.
+- An `SC Workflow Checksum` node contributes no values of its own to the `inputs` scope — it
+  observes the workflow rather than configuring it, and hashing the digest it displays would make
+  the result self-referential. Adding or removing one still counts as a structural change.
+- The digest is computed on the server, so every node in the pack that needs one always agrees.
+
+---
+
+## Enhancements
+
+Not every improvement wants to be a node. These attach to what is already there.
+
+### Filtered dropdowns
+
+Sets a **persistent filter** on any dropdown — base or third-party — so a long list of
+checkpoints, LoRAs or samplers stays narrowed to what you actually use.
+
+ComfyUI already offers an ad-hoc "Filter list" box while a dropdown is open, but it forgets what
+you typed as soon as you close it. This one is saved with the workflow.
+
+**Setting a filter** — right-click the node, choose **SC Combo Filter**, and pick the dropdown to
+filter. Enter either:
+
+| Filter | Matches |
+| --- | --- |
+| `qwen3` | Anything containing "qwen3", case-insensitive |
+| `/^sdxl/i` | A regular expression, between slashes, with the usual flags |
+
+An empty filter clears it. A filtered dropdown shows its filter in the widget label, so an active
+filter is never invisible — `clip_name  [qwen3]`.
+
+**Notes**
+
+- **A value outside the filter is cleared.** Setting a filter says that only matching values are
+  wanted from now on, which makes any existing value suspect — so it is set to `null` and must be
+  reselected from the narrowed list. A filter matching nothing likewise empties the dropdown and
+  clears the value, so the filter itself has to be corrected.
+- This also applies when a **saved workflow is opened**: a value that no longer matches, because
+  the filter was edited elsewhere or the underlying file was removed, is cleared on load and must
+  be reselected before the workflow will run.
+- The filter is stored in the node's `properties` as `sc_filter:<widget>`, so it saves and restores
+  with the workflow. Nodes you have never filtered carry no trace of the feature.
+- Because the filter attaches to the real widget, there is no `control_after_generate` widget to
+  hide — that only appears on the primitive-node route this deliberately avoids.
+- Works under both the legacy renderer and Nodes 2.0.
 
 ---
 
