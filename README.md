@@ -110,7 +110,7 @@ Pastes the values of an earlier run back into this workflow, from a file written
 [SC Save Inputs](#sc-save-inputs). For returning to settings you liked, flipping between test
 configurations, or undoing an afternoon of fiddling in one click.
 
-> **Screenshot pending.**
+![The SC Load Inputs node](assets/images/sc-load-inputs.png)
 
 Press **load inputs…**, pick a file — they land in `output/runs/` by default — and the values are
 restored. The `run file` row then shows what was last loaded.
@@ -190,7 +190,7 @@ Writes every input value in the workflow to a JSON file in the output folder, ea
 workflow runs — a record of what a run was actually invoked with. Load one back with
 [SC Load Inputs](#sc-load-inputs) to return to a run you liked.
 
-> **Screenshot pending.**
+![The SC Save Inputs node](assets/images/sc-save-inputs.png)
 
 Drop the node anywhere on the canvas. Nothing needs to be wired to it: the values it records reach
 it as metadata describing the whole prompt, not as inputs of its own, so where it sits makes no
@@ -303,8 +303,6 @@ workflow, its values, or both have changed. The displayed value updates live as 
 canvas — no run required.
 
 ![The SC Workflow Checksum node](assets/images/sc-workflow-checksum.png)
-
-*Screenshot pending.*
 
 | Scope | Covers | Changes when |
 | --- | --- | --- |
