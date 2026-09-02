@@ -46,9 +46,15 @@ Nodes inside a subgraph are captured too, with a `subgraph` field saying which b
 The subgraph's own instance node is skipped, because the widgets promoted onto it are copies of
 ones still held by the nodes inside — counting both would record every packed value twice.
 
-An `SC Workflow Checksum` node contributes no values here. It shows a digest it worked out from the
-workflow rather than anything you chose, so saving it would preserve a stale reading and restoring
-it would overwrite a live one.
+Three node types contribute no values here, because what they hold is this pack's own bookkeeping
+rather than anything a run uses:
+
+- **`SC Workflow Checksum`** shows a digest it worked out from the workflow rather than anything you
+  chose, so saving it would preserve a stale reading and restoring it would overwrite a live one.
+- **`SC Load Inputs`** notes which file it last restored from.
+- **This node's own `filename_prefix`** — restoring it would silently redirect where your *future*
+  runs are written, which is not what anyone means by "put my old settings back". It is still
+  recorded under `resolved`, since the run genuinely used it.
 
 ### `resolved` — what actually ran
 
@@ -66,10 +72,10 @@ never sees them.
 All four are recorded so the file can answer any of the questions they answer, without needing the
 workflow itself. Their uses:
 
-- **`structure`** decides whether the file still fits a workflow. It covers the nodes and their
-  wiring and nothing else, so it changes precisely when saved values would no longer line up — and
-  stays put when you have merely moved nodes about or edited values, which is the normal state of
-  affairs when restoring. `SC Load Inputs` compares this one.
+- **`structure`** says whether the graph itself has changed — nodes, types and wiring, and nothing
+  else. `SC Load Inputs` reports a difference here as a note, but does not refuse over it: whether
+  a restore can proceed is decided by checking that each saved node is still present, which a
+  whole-graph digest cannot answer.
 - **`layout`** is the strict comparison: are these two workflows identical in every respect except
   the values typed into them?
 - **`inputs`** fingerprints the values alone, so two runs can be told apart at a glance.

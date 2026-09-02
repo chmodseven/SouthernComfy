@@ -1,0 +1,324 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        440,
+        320
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "SouthernComfy - Save and Load Inputs\n\nPress Run. SC Save Inputs writes every value on this canvas to\n    ComfyUI/output/runs/example_00001.json\n(then _00002, and so on). No model is needed - nothing here generates an image.\n\nNow change some values below. Then press 'load inputs...' on SC Load Inputs and\npick the file you just made: the old values come back, and your edits to\npositions, titles and wiring are left alone.\n\nTwo things to notice:\n  - 'Seed (randomize)' is advanced by ComfyUI the moment you press Run, so a\n    restored value there changes again on the next run. SC Load Inputs warns\n    you and names it. 'Seed (fixed)' stays put.\n  - Deleting one of the valued nodes makes the restore refuse: those values\n    have nowhere to go. Adding nodes is fine, and so is moving or renaming\n    them - the restore just notes that the workflow has been edited."
+      ],
+      "widgets_values_named": {
+        "text": "SouthernComfy - Save and Load Inputs\n\nPress Run. SC Save Inputs writes every value on this canvas to\n    ComfyUI/output/runs/example_00001.json\n(then _00002, and so on). No model is needed - nothing here generates an image.\n\nNow change some values below. Then press 'load inputs...' on SC Load Inputs and\npick the file you just made: the old values come back, and your edits to\npositions, titles and wiring are left alone.\n\nTwo things to notice:\n  - 'Seed (randomize)' is advanced by ComfyUI the moment you press Run, so a\n    restored value there changes again on the next run. SC Load Inputs warns\n    you and names it. 'Seed (fixed)' stays put.\n  - Deleting one of the valued nodes makes the restore refuse: those values\n    have nowhere to go. Adding nodes is fine, and so is moving or renaming\n    them - the restore just notes that the workflow has been edited."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 2,
+      "type": "SC_SaveInputs",
+      "pos": [
+        40,
+        400
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "aux_id": "chmodseven/SouthernComfy",
+        "ver": "aa3524c91b96acbe48b4abe7c475da41fcc77043",
+        "Node name for S&R": "SC_SaveInputs"
+      },
+      "widgets_values": [
+        "runs/example"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "runs/example"
+      }
+    },
+    {
+      "id": 3,
+      "type": "SC_LoadInputs",
+      "pos": [
+        40,
+        540
+      ],
+      "size": [
+        300,
+        72
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "aux_id": "chmodseven/SouthernComfy",
+        "ver": "aa3524c91b96acbe48b4abe7c475da41fcc77043",
+        "Node name for S&R": "SC_LoadInputs"
+      },
+      "widgets_values": [
+        "(none)",
+        null
+      ],
+      "widgets_values_named": {
+        "run file": "(none)",
+        "load inputs…": null
+      }
+    },
+    {
+      "id": 4,
+      "type": "EmptySD3LatentImage",
+      "pos": [
+        520,
+        400
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "batch_size",
+          "name": "batch_size",
+          "type": "INT",
+          "widget": {
+            "name": "batch_size"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.0",
+        "Node name for S&R": "EmptySD3LatentImage"
+      },
+      "widgets_values": [
+        1152,
+        896,
+        2
+      ],
+      "widgets_values_named": {
+        "width": 1152,
+        "height": 896,
+        "batch_size": 2
+      }
+    },
+    {
+      "id": 5,
+      "type": "PrimitiveInt",
+      "pos": [
+        520,
+        600
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "INT",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "INT",
+          "name": "INT",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "Seed (randomize)",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.0",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        12345,
+        "randomize"
+      ],
+      "widgets_values_named": {
+        "value": 12345,
+        "fixed": "randomize"
+      }
+    },
+    {
+      "id": 6,
+      "type": "PrimitiveInt",
+      "pos": [
+        520,
+        770
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "INT",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "INT",
+          "name": "INT",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "Seed (fixed)",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.0",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        999,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 999,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveString",
+      "pos": [
+        520,
+        210
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Prompt text",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.0",
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        "a demonstration prompt"
+      ],
+      "widgets_values_named": {
+        "value": "a demonstration prompt"
+      }
+    }
+  ],
+  "links": [],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.0167219810264623,
+      "offset": [
+        -1962.2293556620493,
+        696.5820406075309
+      ]
+    }
+  },
+  "version": 0.4
+}

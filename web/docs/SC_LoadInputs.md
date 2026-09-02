@@ -4,8 +4,22 @@ Pastes the values of an earlier run back into this workflow, from a file written
 `SC Save Inputs`. Use it to return to settings you liked, to flip between test configurations, or
 to undo an afternoon of fiddling in one click.
 
-Press **load inputs…**, choose a file — they are written to `output/runs/` by default — and the
-values are restored. The `run file` row then shows what was last loaded.
+Press **load inputs…**, choose a file, and the values are restored. The `run file` row then shows
+what was last loaded.
+
+## Where the files are
+
+`SC Save Inputs` writes them under your ComfyUI installation's **`output`** folder, in whatever
+subfolder its `filename_prefix` names. With the default prefix of `runs/run` that is:
+
+```
+<your ComfyUI folder>/output/runs/run_00001.json
+```
+
+The file dialog opens wherever your browser last left it, so after the first time you point it at
+`output/runs` it will keep coming back there. If you have changed the prefix on `SC Save Inputs`,
+look in the subfolder it names instead — and remember it also honours the date substitutions, so a
+prefix like `runs/%year%-%month%-%day%/run` puts each day in its own folder.
 
 ## What it restores
 
@@ -24,17 +38,29 @@ The file is checked twice before anything is written, and a refusal changes noth
 something unrelated. A file that is not a run-inputs record, or one written by a newer
 SouthernComfy than you are running, is refused by name.
 
-**Does it still fit?** The file's `structure` checksum is compared against this workflow's.
-`structure` covers the nodes, their types and their wiring — and nothing else — so:
+**Do its values still have somewhere to land?** Every node the file holds values for must still be
+on the canvas, with the same id and the same type. That is the only requirement, because nothing
+else can stop a value going back where it came from:
 
 | Since you saved | Result |
 | --- | --- |
-| You edited values | **Fits.** That is the whole point |
-| You moved, resized, recoloured or retitled nodes | **Fits.** None of that is structure |
-| You added, deleted, rewired or bypassed a node | **Refused.** The values no longer line up |
+| You edited values | **Fine.** That is the whole point |
+| You moved, resized, recoloured or retitled nodes | **Fine** |
+| You **added** nodes, or rewired existing ones | **Fine.** An addition cannot disturb values already there |
+| You **deleted** a node that had saved values | **Refused** |
+| You **changed the type** of a node that had saved values | **Refused** |
 
-A refusal names both digests so you can see they differ. Either put the workflow back the way it
-was, or use a record saved from the workflow as it is now.
+A refusal names the nodes it could not place. Either put them back, or save a fresh record from the
+workflow as it now stands.
+
+Note that adding nodes is deliberately allowed. Comparing whole-workflow checksums would be the
+obvious alternative, but it asks the wrong question: it would refuse a record merely because the
+graph had grown, and — since this node is itself a node — a record saved before you added
+`SC Load Inputs` could never be loaded by it. Restoring into a workflow that has moved on is the
+ordinary case, not the exception.
+
+If the workflow has changed structurally, the result says so. It is a note, not a problem: it is
+there to explain a restore that touched fewer nodes than you expected.
 
 ## What it tells you afterwards
 
@@ -64,6 +90,8 @@ seed you restored to be the seed that runs.
 - Deciding is done by the server, not the browser, so the rules a record is written by and read by
   are the same rules. Applying the values has to happen in the browser: ComfyUI's execution is
   pull-based, and no node can write into another node's widgets.
+- `SC Save Inputs`' own `filename_prefix` is never restored. Returning to an old set of values
+  should not quietly change where your future runs get written.
 - This node contributes no values of its own to the `inputs` checksum, and none to a file saved by
   `SC Save Inputs`. The file it last loaded is a note about what you did, not a setting a run uses
   — and counting it would mean a restored workflow could never match the checksum of the file it

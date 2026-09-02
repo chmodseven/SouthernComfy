@@ -109,14 +109,21 @@ saved image onto the canvas, which replaces the entire workflow.
 
 **When it refuses** — the file is checked twice, and a refusal changes nothing at all. First, that
 it is one of ours: a stray `.json` from the output folder, or a file from a newer SouthernComfy, is
-refused by name. Second, that it still fits — the file's `structure` checksum against this
-workflow's:
+refused by name. Second, that its values still have somewhere to land — every node the file holds
+values for must still be on the canvas, with the same id and type:
 
 | Since you saved | Result |
 | --- | --- |
-| You edited values | **Fits** — that is the whole point |
-| You moved, resized, recoloured or retitled nodes | **Fits** — none of that is structure |
-| You added, deleted, rewired or bypassed a node | **Refused** — the values no longer line up |
+| You edited values | **Fine** — that is the whole point |
+| You moved, resized, recoloured or retitled nodes | **Fine** |
+| You **added** nodes, or rewired existing ones | **Fine** — an addition cannot disturb values already there |
+| You **deleted** or **retyped** a node that had saved values | **Refused** — those values have nowhere correct to go |
+
+Adding nodes is deliberately allowed. Comparing whole-workflow checksums asks the wrong question:
+it would refuse a record merely because the graph had grown — and, since this is itself a node, a
+record saved before you added SC Load Inputs could never be loaded by it. Restoring into a workflow
+that has moved on is the ordinary case, not the exception. A structural change is still *reported*,
+as a note rather than a refusal.
 
 **Afterwards** it reports how many values were restored and anything it could not do: node types
 whose widgets did not match (almost always an uninstalled node pack — ComfyUI substitutes a
@@ -134,7 +141,8 @@ and any widget that will advance again.
 - This node contributes no values to the `inputs` checksum, and none to a file saved by SC Save
   Inputs. The file it last loaded is a note about what you did, not a setting a run uses — and
   counting it would mean a restored workflow could never match the checksum of the file it was
-  restored from.
+  restored from. SC Save Inputs' own `filename_prefix` is left out of a restore for a related
+  reason: going back to old values should not quietly move where future runs are written.
 - Browsers hand over a file's name but never its path, so the `run file` row cannot be used to
   reload the same file — press the button again and pick it.
 - Works under both the legacy renderer and Nodes 2.0.
@@ -181,7 +189,9 @@ makes ComfyUI schedule it, but it produces nothing for anything else to consume.
 
 `nodes` holds one entry per node that carries any value, keyed by widget name. Nodes inside a
 subgraph are captured as well, tagged with the body they came from; the subgraph's own instance
-node is skipped, since the widgets promoted onto it are copies of ones still held inside.
+node is skipped, since the widgets promoted onto it are copies of ones still held inside. This
+pack's own bookkeeping values are left out — SC Workflow Checksum's digest, SC Load Inputs' last
+file, and this node's own `filename_prefix`.
 
 `resolved` is the same run seen from the backend, and is never restored — it is the record of what
 happened. It can legitimately differ from `nodes`: a widget converted into an input still carries
@@ -189,9 +199,8 @@ its last typed value in the workflow, while `resolved` shows the value that came
 Frontend-only controls such as `control_after_generate` appear only in `nodes`.
 
 **Why all four checksums** — so the file can answer any of their questions without needing the
-workflow itself. `structure` decides whether the file still fits a workflow, and is the one
-SC Load Inputs compares: it changes precisely when saved values would no longer line up, and stays
-put when you have merely moved nodes or edited values. `layout` is the strict "identical but for
+workflow itself. `structure` says whether the graph itself has changed; SC Load Inputs reports a
+difference as a note rather than refusing over it. `layout` is the strict "identical but for
 the values" comparison, `inputs` fingerprints the values alone, and `everything` is the catch-all.
 See [SC Workflow Checksum](#sc-workflow-checksum) for what each scope covers.
 
@@ -358,10 +367,16 @@ The `example_workflows/` directory holds workflows exported straight from ComfyU
 | Workflow | Shows |
 | --- | --- |
 | `sc_version.json` | The **SC Version** node on its own, reporting the running ComfyUI and SouthernComfy versions. |
+| `sc_run_inputs.json` | **SC Save Inputs** and **SC Load Inputs** together, with a few valued nodes to save and restore. Runnable as it stands — no model required. |
 
-Because SC Version is purely informational, this workflow has nothing to execute — running it
+Because SC Version is purely informational, `sc_version.json` has nothing to execute — running it
 reports "Prompt has no outputs", which is expected. It is there to demonstrate the node; drop the
 node into a graph of your own to use it for real.
+
+`sc_run_inputs.json` does run, and needs no model to do it: SC Save Inputs is an output node, so
+pressing Run writes `output/runs/example_00001.json` and nothing else happens. Change some values,
+press **load inputs…**, pick that file, and they come back. The Note node on the canvas walks
+through it, including what happens to a randomised seed and what a structural edit does.
 
 ---
 

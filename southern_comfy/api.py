@@ -9,10 +9,10 @@ Two kinds of value reach the browser this way rather than as execution results:
   ``southern_comfy.workflow_hash`` alone -- a second implementation in
   JavaScript would be free to drift out of agreement with the Python one, and
   the two disagreeing would be worse than useless.
-* ``SC Load Inputs`` must decide whether a saved record still fits the workflow
-  on the canvas, which is the same digest question, and must judge whether the
-  file is one of ours at all. Both answers come from here so that the rules a
-  record is written by and the rules it is read by cannot drift apart.
+* ``SC Load Inputs`` must judge whether a file is one of ours and whether its
+  values still have somewhere to land in the workflow on the canvas. Both
+  answers come from here, so the rules a record is written by and the rules it
+  is read by cannot drift apart.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import logging
 from functools import cache
 
 from .comfy_runtime import get_comfyui_version
-from .run_inputs import describe_mismatch, validate
+from .run_inputs import describe_coverage, structure_differs, validate
 from .version import PACK_VERSION
 from .workflow_hash import compute_all
 
@@ -98,10 +98,18 @@ def register_routes() -> None:
         if not isinstance(workflow, dict):
             return web.json_response({"error": "Expected a 'workflow' object."}, status=400)
 
-        mismatch = describe_mismatch(record, compute_all(workflow))
-        if mismatch is not None:
-            # 409: the file is perfectly valid, it just does not belong to this
-            # graph. Worth distinguishing from a malformed one.
-            return web.json_response({"error": f"This file {mismatch}."}, status=409)
+        gap = describe_coverage(record, workflow)
+        if gap is not None:
+            # 409: the file is perfectly valid, its values simply have nowhere
+            # to land here. Worth distinguishing from a malformed one.
+            return web.json_response({"error": f"This file {gap}."}, status=409)
 
-        return web.json_response({"nodes": record["nodes"], "saved_at": record.get("saved_at")})
+        return web.json_response(
+            {
+                "nodes": record["nodes"],
+                "saved_at": record.get("saved_at"),
+                # Not a problem, but worth the user knowing: it explains why a
+                # graph that has grown since the run still restores cleanly.
+                "edited": structure_differs(record, compute_all(workflow)),
+            }
+        )

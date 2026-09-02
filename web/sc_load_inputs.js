@@ -134,10 +134,15 @@ function pairs(entry, widgets) {
     ]);
 }
 
+/** How to refer to a node in a message: the user's title if they set one. */
+function label(entry) {
+    return `${entry.title || entry.type} #${entry.id}`;
+}
+
 function applyEntry(entry, report) {
     const node = findNode(entry);
     if (!node) {
-        report.missingNodes.add(`${entry.type} #${entry.id}`);
+        report.missingNodes.add(label(entry));
         return;
     }
     // The structure digest already guarantees the types line up, so this only
@@ -172,15 +177,21 @@ function applyEntry(entry, report) {
         }
 
         if (widget.type === "combo" && CONTROL_VALUES.has(value) && value !== "fixed") {
-            report.willAdvance.add(`${entry.type} #${entry.id}`);
+            report.willAdvance.add(label(entry));
         }
         report.applied += 1;
     }
 }
 
 /** Human-readable summary of what a restore did, and what it could not do. */
-function summarise(report) {
+function summarise(report, edited) {
     const notes = [];
+    if (edited) {
+        // Never a failure: values are matched node by node, so a graph that has
+        // gained nodes since the run restores perfectly well. Said out loud
+        // because it explains a result that might otherwise look partial.
+        notes.push("This workflow has been edited since the file was saved.");
+    }
     if (report.unmatched.size) {
         notes.push(
             `${report.unmatched.size} node type(s) had no matching widgets, ` +
@@ -195,11 +206,12 @@ function summarise(report) {
         notes.push(`Changed type since saving: ${[...report.retyped].join(", ")}.`);
     }
     if (report.willAdvance.size) {
+        const one = report.willAdvance.size === 1;
         notes.push(
             `Heads up: ${[...report.willAdvance].join(", ")} ` +
-                `${report.willAdvance.size === 1 ? "is" : "are"} set to advance after ` +
-                `generating, so the restored seed changes again on the next run. ` +
-                `Set it to "fixed" to keep it.`,
+                `${one ? "is" : "are"} set to advance after generating, so the restored ` +
+                `seed${one ? "" : "s"} will change again on the next run. ` +
+                `Set ${one ? "it" : "them"} to "fixed" to keep ${one ? "it" : "them"}.`,
         );
     }
     return notes.join(" ");
@@ -255,13 +267,21 @@ async function loadInputs(fileWidget) {
     app.graph.setDirtyCanvas(true, true);
 
     const saved = plan.saved_at ? ` saved ${plan.saved_at}` : "";
-    const detail = summarise(report);
+    const detail = summarise(report, plan.edited);
     if (report.applied === 0) {
         toast("warn", "Nothing restored", detail || `No values in ${chosen.name} could be applied.`);
         return;
     }
+    // An "edited" note on its own is information; anything else is a caveat the
+    // user needs to act on -- a value that did not land, or a seed that will
+    // move again by itself.
+    const caveats =
+        report.unmatched.size +
+        report.missingNodes.size +
+        report.retyped.size +
+        report.willAdvance.size;
     toast(
-        detail ? "warn" : "success",
+        caveats ? "warn" : "success",
         `Restored ${report.applied} value${report.applied === 1 ? "" : "s"}`,
         `From ${chosen.name}${saved}. ${detail}`.trim(),
     );
@@ -284,8 +304,16 @@ app.registerExtension({
             // Which file was last restored from. Informational: a browser hands
             // over a file's name but never its path, so this cannot be used to
             // find the file again -- it is there to say what the node last did.
+            // `serialize: false` keeps both of these out of the API prompt.
+            // Neither is an input: one is a label, the other a button, and
+            // without this the frontend sends them to the backend as though a
+            // run depended on them -- where they turn up in the `resolved` half
+            // of anything SC Save Inputs writes. They still persist in the
+            // workflow's `widgets_values`, which is what keeps the label across
+            // a reload.
             const fileWidget = this.addWidget("text", FILE_WIDGET, NONE, () => {}, {
                 read_only: true,
+                serialize: false,
             });
             fileWidget.onClick = () => {};
 
@@ -294,7 +322,7 @@ app.registerExtension({
                     console.error("[SouthernComfy] The restore failed.", error);
                     toast("error", "Could not load inputs", String(error?.message ?? error));
                 });
-            });
+            }, { serialize: false });
 
             const [width, height] = this.computeSize();
             this.setSize([Math.max(width, MIN_WIDTH), height]);

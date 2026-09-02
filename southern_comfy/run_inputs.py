@@ -64,8 +64,10 @@ from .workflow_hash import OBSERVER_NODE_TYPES, compute_all, iter_nodes, subgrap
 __all__ = [
     "FORMAT",
     "FORMAT_VERSION",
+    "UNRESTORABLE_TYPES",
     "capture",
-    "describe_mismatch",
+    "describe_coverage",
+    "structure_differs",
     "validate",
 ]
 
@@ -75,13 +77,25 @@ FORMAT = "southerncomfy.run_inputs"
 #: Incremented only if the shape below changes in a way a reader must know about.
 FORMAT_VERSION = 1
 
-#: Scope whose digest decides whether a saved record still fits a workflow.
+#: Scope reported as an advisory when a record is applied to an edited graph.
 #:
-#: ``structure`` covers the nodes, their types and their wiring, and nothing
-#: else -- so it changes precisely when saved values would no longer line up,
-#: and stays put when the user has merely moved nodes around or edited values,
-#: which is the normal state of affairs when restoring.
-COMPATIBILITY_SCOPE = "structure"
+#: ``structure`` moves when nodes are added, deleted or rewired and stays put
+#: when they are merely moved or retyped into, so a difference here is worth
+#: mentioning -- but it does not decide anything. See ``describe_coverage`` for
+#: why the digest makes a poor gate.
+EDIT_SCOPE = "structure"
+
+#: Node types whose own values are this pack's bookkeeping, not run parameters.
+#:
+#: Beyond the observers, ``SC_SaveInputs`` is here for a reason of its own:
+#: restoring its ``filename_prefix`` would silently redirect where *future* runs
+#: are written. Returning to an old set of values should not quietly move the
+#: output folder, so its prefix is recorded under ``resolved`` -- where the run
+#: genuinely used it -- and left out of the restorable half.
+UNRESTORABLE_TYPES = OBSERVER_NODE_TYPES | frozenset({"SC_SaveInputs"})
+
+#: Names listed in full before a complaint switches to "and N more".
+_MAX_NAMED = 5
 
 #: A prompt input supplied by a link is ``[origin_node_id, origin_slot]``.
 _LINK_FIELDS = 2
@@ -125,7 +139,7 @@ def _node_values(workflow: dict) -> list[dict]:
     entries: list[dict] = []
     for node, subgraph in iter_nodes(workflow):
         node_type = node.get("type")
-        if node_type in OBSERVER_NODE_TYPES or str(node_type) in packed:
+        if node_type in UNRESTORABLE_TYPES or str(node_type) in packed:
             continue
 
         values = _widget_values(node)
@@ -244,25 +258,83 @@ def validate(payload: Any) -> str | None:
     return None
 
 
-def describe_mismatch(payload: dict, checksums: dict) -> str | None:
-    """Return why a record does not fit a workflow, or ``None`` if it does.
+def _entry_label(entry: dict) -> str:
+    """Name an entry the way the user would recognise it."""
+    return f"{entry.get('title') or entry.get('type')} #{entry.get('id')}"
 
-    Compares only the ``structure`` digest. Layout and values are expected to
-    differ -- restoring values into a workflow whose values differ is the whole
-    point -- while a structural difference means the graph is no longer the one
-    the values were taken from, and pasting them in would put them on the wrong
-    controls or on nothing at all.
 
-    Phrased to follow "This file ...", as ``validate``'s complaints are.
+def _listing(names: list[str]) -> str:
+    """Join names for a message, abbreviating a long list rather than dumping it."""
+    if len(names) <= _MAX_NAMED:
+        return ", ".join(names)
+    return f"{', '.join(names[:_MAX_NAMED])} and {len(names) - _MAX_NAMED} more"
+
+
+def describe_coverage(payload: dict, workflow: dict) -> str | None:
+    """Return why a record's values cannot be applied here, or ``None`` if they can.
+
+    The test is the restore's real precondition: every node the record holds
+    values for must still exist, with the same id and the same type. Nothing
+    else is required, because nothing else can stop a value going back where it
+    came from.
+
+    Comparing the ``structure`` digest instead -- the obvious first idea -- turns
+    out to be the wrong question, and wrong in a way that makes the feature hard
+    to use. That digest covers the whole graph, so *adding* a node invalidates a
+    record even though an addition cannot disturb the values of the nodes
+    already there. Adding ``SC Load Inputs`` itself is the sharpest case: a
+    record saved before the node was placed can never be loaded by it, which is
+    a catch with no way out. The same bites for a Note, or a new branch built
+    since the run. Restoring into a graph that has moved on is the ordinary
+    case, not the exceptional one, so the gate has to allow it.
+
+    What is deliberately still refused is a record whose nodes are *gone* or
+    have changed type. Those values have nowhere correct to land, and applying
+    the remainder silently would leave the workflow in a state that matches
+    neither the record nor what it was before.
+
+    The residual risk this accepts: a record from an unrelated workflow could be
+    applied if every node it carries values for happened to match by id and
+    type. That needs a coincidence across the whole record, which is implausible
+    on any real graph -- and ``structure_differs`` still reports the difference,
+    so it is visible rather than hidden.
     """
-    saved = payload.get("checksums", {}).get(COMPATIBILITY_SCOPE)
-    current = checksums.get(COMPATIBILITY_SCOPE)
-    if not isinstance(saved, str) or not isinstance(current, str):
-        return "was saved without a structure checksum"
-    if saved != current:
-        return (
-            "was saved from a workflow with a different structure "
-            f"({saved[:_SHORT]}... rather than {current[:_SHORT]}...). Add, delete or rewire "
-            "nodes to match the workflow it came from, or use a record saved from this one"
-        )
-    return None
+    present = {
+        (subgraph, str(node.get("id"))): node.get("type") for node, subgraph in iter_nodes(workflow)
+    }
+
+    missing: list[str] = []
+    retyped: list[str] = []
+    for entry in payload.get("nodes", []):
+        if not isinstance(entry, dict):
+            continue
+        found = present.get((entry.get("subgraph"), str(entry.get("id"))))
+        if found is None:
+            missing.append(_entry_label(entry))
+        elif str(found) != str(entry.get("type")):
+            retyped.append(_entry_label(entry))
+
+    complaints = []
+    if missing:
+        complaints.append(f"nodes this workflow no longer has ({_listing(missing)})")
+    if retyped:
+        complaints.append(f"nodes that have changed type since ({_listing(retyped)})")
+    if not complaints:
+        return None
+
+    return (
+        f"holds values for {' and '.join(complaints)}. Restore it into the workflow it "
+        f"came from, or save a fresh record from this one"
+    )
+
+
+def structure_differs(payload: dict, checksums: dict) -> bool:
+    """Whether the workflow has been structurally edited since the record was saved.
+
+    Advisory only. It is true whenever a node has been added, deleted or
+    rewired, which is perfectly compatible with a successful restore -- it is
+    worth saying out loud so a partial-looking result has an explanation.
+    """
+    saved = payload.get("checksums", {}).get(EDIT_SCOPE)
+    current = checksums.get(EDIT_SCOPE)
+    return isinstance(saved, str) and isinstance(current, str) and saved != current
