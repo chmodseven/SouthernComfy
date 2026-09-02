@@ -14,6 +14,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Installation](#installation)
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
+  - [What these two are for](#what-these-two-are-for)
   - [SC Load Inputs](#sc-load-inputs)
   - [SC Save Inputs](#sc-save-inputs)
   - [SC Version](#sc-version)
@@ -87,6 +88,22 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 ---
 
+### What these two are for
+
+**SC Save Inputs** and **SC Load Inputs** are the manual, granular half of run recording: a backup
+of the values a run used, and a way to put them back on demand. They are also the shared machinery
+behind **SC Run History**, which is where most of this is meant to be used day to day — an
+automatic list of runs you click to restore, rather than files you name and pick yourself.
+
+They suit a **finished workflow** best: one whose shape is settled, where you are changing prompts
+and tweaking a few settings between runs. You can use them on a workflow still under construction,
+with nodes being added and swapped — nothing stops you, and a restore does as much as it honestly
+can — but expect refusals and partial results there. Values belong to the nodes that held them, and
+a graph being rebuilt around them is exactly where "which node did this belong to?" stops having a
+clean answer.
+
+---
+
 ### SC Load Inputs
 
 Pastes the values of an earlier run back into this workflow, from a file written by
@@ -102,10 +119,13 @@ restored. The `run file` row then shows what was last loaded.
 there if it did: ComfyUI's execution is pull-based, so a node receives its own inputs and has no way
 to write into another node's widgets. The restoring happens in the browser, against the live graph.
 
-**What it restores** — every widget value in the file, matched to its node by **id and type**,
-including nodes inside subgraphs and including `control_after_generate`. Values only: your wiring,
-positions, titles and colours are untouched. That is the difference between this and dragging a
-saved image onto the canvas, which replaces the entire workflow.
+**What it restores** — everything the file holds for each node, matched by **id and type**: widget
+values (including `control_after_generate`, and nodes inside subgraphs), **node properties**, and
+any custom state a node serialised of its own. Properties are set through `setProperty` where
+LiteGraph offers it, so a node that reacts to its own settings changing gets that chance.
+Provenance properties are never restored. State only: your wiring, positions, titles and colours
+are untouched — that is the difference between this and dragging a saved image onto the canvas,
+which replaces the entire workflow.
 
 **When it refuses** — the file is checked twice, and a refusal changes nothing at all. First, that
 it is one of ours: a stray `.json` from the output folder, or a file from a newer SouthernComfy, is
@@ -122,8 +142,21 @@ values for must still be on the canvas, with the same id and type:
 Adding nodes is deliberately allowed. Comparing whole-workflow checksums asks the wrong question:
 it would refuse a record merely because the graph had grown — and, since this is itself a node, a
 record saved before you added SC Load Inputs could never be loaded by it. Restoring into a workflow
-that has moved on is the ordinary case, not the exception. A structural change is still *reported*,
-as a note rather than a refusal.
+that has moved on is the ordinary case, not the exception.
+
+**Deleting and re-adding a node** is handled too. ComfyUI never reuses a node id, so putting an
+identical node back leaves the graph behaving exactly as before while the record still points at an
+id that is gone — and only an *undo* recovers that id, not re-adding. A value whose id has vanished
+may therefore claim a same-type node in the same subgraph that nothing else has claimed, but only
+where the choice is forced: titles settle it first, then a pairing is accepted only if exactly one
+value and one candidate remain. Two indistinguishable candidates are left unplaced rather than
+guessed between. When this happens the result says the graph appears to have been rebuilt, and
+names what was matched by type.
+
+**A change is reported, not refused**, with the distinction the checksums make available: *the
+structure has changed* (nodes added, removed or rewired) or *the workflow has been rearranged but
+its structure is unchanged* (only positions, sizes, titles or colours). Neither is a problem — they
+explain a result that might otherwise look partial.
 
 **Afterwards** it reports how many values were restored and anything it could not do: node types
 whose widgets did not match (almost always an uninstalled node pack — ComfyUI substitutes a
@@ -145,6 +178,8 @@ and any widget that will advance again.
   reason: going back to old values should not quietly move where future runs are written.
 - Browsers hand over a file's name but never its path, so the `run file` row cannot be used to
   reload the same file — press the button again and pick it.
+- Every result stays on screen until dismissed, and is written to the browser console as well, so a
+  message you closed or one from earlier in the session can still be read back.
 - Works under both the legacy renderer and Nodes 2.0.
 
 ---
@@ -164,6 +199,7 @@ difference to what it captures.
 | Input | Type | Meaning |
 | --- | --- | --- |
 | `filename_prefix` | `STRING` | Where to write the file, relative to the output folder. Default `runs/run`. |
+| `description` | `STRING` | Optional one-line note about the run — *"denoise down to 0.9"*. Stored at the top of the file and shown when it is loaded. |
 
 **Inputs and outputs** — none besides the widget above. The node is an output node, which is what
 makes ComfyUI schedule it, but it produces nothing for anything else to consume.
@@ -176,22 +212,40 @@ makes ComfyUI schedule it, but it produces nothing for anything else to consume.
   A prefix of `runs/%year%-%month%-%day%/run` starts a fresh numbered set each day.
 - A prefix that would write outside the output folder is refused.
 
+**The file is written twice** — once as the run starts, once when it ends. ComfyUI gives a custom
+node no post-execution hook and no way to arrange to run last, so the record is written on execution
+(the inputs are already fixed by then) and rewritten when the run finishes with its outcome,
+duration and memory figures. A run that never finishes still leaves a file, with `run.status` left
+at `running`.
+
 **What lands in the file**
 
 | Key | Contents |
 | --- | --- |
 | `format`, `format_version` | Identify the file as one of ours, and which shape it is in |
 | `pack_version` | The SouthernComfy version that wrote it |
-| `saved_at` | Local time of the run, with its UTC offset |
+| `description` | Your one-line note, if you set one |
+| `saved_at` | Local time the run started, with its UTC offset |
+| `run` | Outcome (`success` / `error` / `interrupted`), duration, cached-node count, failing node, and RAM/VRAM at start and end |
 | `checksums` | All four workflow checksums — `everything`, `structure`, `layout`, `inputs` |
-| `nodes` | Every widget value, node by node — the half that gets restored |
+| `nodes` | Every node's restorable state — the half that gets restored |
 | `resolved` | The literal values the backend actually received |
 
-`nodes` holds one entry per node that carries any value, keyed by widget name. Nodes inside a
-subgraph are captured as well, tagged with the body they came from; the subgraph's own instance
-node is skipped, since the widgets promoted onto it are copies of ones still held inside. This
-pack's own bookkeeping values are left out — SC Workflow Checksum's digest, SC Load Inputs' last
-file, and this node's own `filename_prefix`.
+There is no per-node timing, because ComfyUI records none: it timestamps the run's start and end
+and nothing in between.
+
+`nodes` holds one entry per node with any state: its `values` (widget values, keyed by widget
+name), its `properties`, and any `extra` state it serialised of its own. **Properties matter more
+than they sound** — across a 26-workflow sample they held every third-party setting that turned up
+(cg-use-everywhere, rgthree's group togglers, Reroute's orientation, core's `Node name for S&R`)
+while exactly one such setting lived anywhere else, so capturing widgets alone would leave a real
+part of a workflow behind. Provenance properties (`ver`, `cnr_id`, `aux_id`, `models`) are excluded,
+since ComfyUI maintains those itself.
+
+Nodes inside a subgraph are captured as well, tagged with the body they came from; the subgraph's
+own instance node is skipped, since the widgets promoted onto it are copies of ones still held
+inside. This pack's own bookkeeping is left out — SC Workflow Checksum's digest, SC Load Inputs'
+last file, and this node's own `filename_prefix`.
 
 `resolved` is the same run seen from the backend, and is never restored — it is the record of what
 happened. It can legitimately differ from `nodes`: a widget converted into an input still carries

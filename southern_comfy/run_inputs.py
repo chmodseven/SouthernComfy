@@ -55,6 +55,8 @@ describe the run rather than to be replayed.
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
 
@@ -64,26 +66,67 @@ from .workflow_hash import OBSERVER_NODE_TYPES, compute_all, iter_nodes, subgrap
 __all__ = [
     "FORMAT",
     "FORMAT_VERSION",
+    "MINIMUM_FORMAT_VERSION",
     "UNRESTORABLE_TYPES",
     "capture",
-    "describe_coverage",
-    "structure_differs",
+    "describe_change",
+    "finish_run",
+    "plan_restore",
+    "start_run",
     "validate",
 ]
 
 #: Marker identifying a file as one of ours, checked before anything is restored.
 FORMAT = "southerncomfy.run_inputs"
 
-#: Incremented only if the shape below changes in a way a reader must know about.
-FORMAT_VERSION = 1
+#: Incremented if the shape below changes in a way a reader must know about.
+FORMAT_VERSION = 2
 
-#: Scope reported as an advisory when a record is applied to an edited graph.
-#:
-#: ``structure`` moves when nodes are added, deleted or rewired and stays put
-#: when they are merely moved or retyped into, so a difference here is worth
-#: mentioning -- but it does not decide anything. See ``describe_coverage`` for
-#: why the digest makes a poor gate.
-EDIT_SCOPE = "structure"
+#: Oldest version still read. Equal to ``FORMAT_VERSION`` while the pack is
+#: unreleased: nothing outside development has written a record yet, so carrying
+#: code to read a shape we have already replaced would be maintaining a
+#: compatibility promise made to nobody. Once the pack ships, lower this instead
+#: of adding branches, and keep readers tolerant of absent keys rather than
+#: versioned.
+MINIMUM_FORMAT_VERSION = FORMAT_VERSION
+
+#: ``properties`` keys recording where a node came from rather than how it is set
+#: up. Captured for the record but never restored: writing a saved ``ver`` or
+#: ``cnr_id`` back onto a node would misstate which release of which pack it
+#: belongs to, and ComfyUI maintains them itself.
+PROVENANCE_PROPERTIES = frozenset({"ver", "cnr_id", "aux_id", "models"})
+
+#: Serialised node keys that describe the *graph* rather than a node's own
+#: state. Anything else a node writes into its serialised form is state some
+#: pack chose to keep outside ``properties``, and is captured as ``extra``.
+_STRUCTURAL_KEYS = frozenset(
+    {
+        "id",
+        "type",
+        "pos",
+        "size",
+        "flags",
+        "order",
+        "mode",
+        "inputs",
+        "outputs",
+        "properties",
+        "widgets_values",
+        "widgets_values_named",
+        "title",
+        "color",
+        "bgcolor",
+        "shape",
+        "index",
+        "subgraph",
+    }
+)
+
+#: Scopes reported as an advisory when a record is applied to an edited graph,
+#: most significant first. Neither decides anything -- see ``plan_restore``
+#: for why a whole-graph digest makes a poor gate -- but naming the kind of
+#: change costs nothing and explains a surprising-looking result.
+EDIT_SCOPES = ("structure", "layout")
 
 #: Node types whose own values are this pack's bookkeeping, not run parameters.
 #:
@@ -99,9 +142,6 @@ _MAX_NAMED = 5
 
 #: A prompt input supplied by a link is ``[origin_node_id, origin_slot]``.
 _LINK_FIELDS = 2
-
-#: Digest characters shown when reporting a mismatch; enough to tell two apart.
-_SHORT = 12
 
 
 def _timestamp() -> str:
@@ -132,8 +172,48 @@ def _widget_values(node: dict) -> dict | list | None:
     return None
 
 
+def _node_properties(node: dict) -> dict:
+    """A node's ``properties``, minus the ones ComfyUI maintains itself.
+
+    Most third-party state lives here rather than in widgets -- measured across
+    a 26-workflow corpus, ``properties`` held every pack-specific setting that
+    turned up (cg-use-everywhere's ``ue_properties``, rgthree's Fast Groups
+    settings, Reroute's ``horizontal``, core's own ``Node name for S&R``) while
+    exactly one such setting appeared anywhere else. Capturing widgets alone
+    therefore misses a real part of how a workflow is set up.
+
+    Only provenance is dropped. The rest is kept even where it looks like
+    runtime state rather than configuration, because the two cannot be told
+    apart by inspection -- the lesson ``_OWNED_PROPERTY_PREFIX`` in
+    ``workflow_hash`` records -- and because putting a node back exactly as it
+    was is the point here. Restoring a stale reading is harmless; the node
+    overwrites it on its next run.
+
+    Note this is capture, not hashing. ``workflow_hash`` still digests only the
+    properties this pack owns, so none of this can make a checksum drift.
+    """
+    properties = node.get("properties")
+    if not isinstance(properties, dict):
+        return {}
+    return {k: v for k, v in properties.items() if k not in PROVENANCE_PROPERTIES}
+
+
+def _extra_state(node: dict) -> dict:
+    """Whatever a node serialised outside the fields ComfyUI defines.
+
+    LiteGraph lets a node add its own keys through ``onSerialize``, so this is
+    the other place pack state can hide. It is rare -- one key across the whole
+    corpus -- but it costs nothing to carry, and a node that uses it has no
+    other way to be restored. Keys beginning with an underscore are skipped as
+    internals.
+    """
+    return {
+        k: v for k, v in node.items() if k not in _STRUCTURAL_KEYS and not str(k).startswith("_")
+    }
+
+
 def _node_values(workflow: dict) -> list[dict]:
-    """Every user-set widget value in the workflow, node by node."""
+    """Every restorable piece of node state in the workflow, node by node."""
     packed = subgraph_ids(workflow)
 
     entries: list[dict] = []
@@ -142,8 +222,10 @@ def _node_values(workflow: dict) -> list[dict]:
         if node_type in UNRESTORABLE_TYPES or str(node_type) in packed:
             continue
 
-        values = _widget_values(node)
-        if values is None:
+        values = _widget_values(node) or {}
+        properties = _node_properties(node)
+        extra = _extra_state(node)
+        if not values and not properties and not extra:
             continue
 
         entry: dict[str, Any] = {"id": node.get("id"), "type": node_type}
@@ -156,6 +238,10 @@ def _node_values(workflow: dict) -> list[dict]:
         if subgraph is not None:
             entry["subgraph"] = subgraph
         entry["values"] = values
+        if properties:
+            entry["properties"] = properties
+        if extra:
+            entry["extra"] = extra
         entries.append(entry)
 
     return entries
@@ -197,13 +283,141 @@ def _resolved_inputs(prompt: dict) -> dict[str, dict]:
     return resolved
 
 
-def capture(workflow: dict | None, prompt: dict | None) -> dict:
+STATUS_RUNNING = "running"
+STATUS_SUCCESS = "success"
+STATUS_ERROR = "error"
+STATUS_INTERRUPTED = "interrupted"
+
+#: Execution messages ComfyUI stamps into a history entry, and the status each
+#: one implies. Every message carries a millisecond ``timestamp``.
+_END_MESSAGES = {
+    "execution_success": STATUS_SUCCESS,
+    "execution_error": STATUS_ERROR,
+    "execution_interrupted": STATUS_INTERRUPTED,
+}
+
+#: A recorded execution message is ``[name, data]``.
+_MESSAGE_FIELDS = 2
+
+
+def start_run(prompt_id: str | None, memory: dict | None = None) -> dict:
+    """The ``run`` block as it stands while the prompt is still executing.
+
+    Written out immediately so a record exists even if ComfyUI is closed, or
+    crashes, before the run ends. ``finish_run`` replaces it once the outcome is
+    known.
+    """
+    run: dict[str, Any] = {
+        "prompt_id": prompt_id,
+        "status": STATUS_RUNNING,
+        "started_at": _timestamp(),
+    }
+    if memory:
+        run["memory_at_start"] = memory
+    return run
+
+
+def _messages(history_entry: dict) -> Iterator[tuple[str, dict]]:
+    """Each execution message in a history entry, as ``(name, data)``.
+
+    ``status.messages`` is a list of ``[name, data]`` pairs, and ComfyUI stamps
+    a millisecond ``timestamp`` onto every one of them.
+    """
+    status = history_entry.get("status")
+    messages = status.get("messages") if isinstance(status, dict) else None
+    if not isinstance(messages, list):
+        return
+    for message in messages:
+        if isinstance(message, (list, tuple)) and len(message) >= _MESSAGE_FIELDS:
+            name, data = message[0], message[1]
+            if isinstance(data, dict):
+                yield str(name), data
+
+
+def _outcome(times: dict[str, int], history_entry: dict) -> tuple[str | None, int | None]:
+    """The run's final status and the moment it reached it."""
+    for message, implied in _END_MESSAGES.items():
+        if message in times:
+            return implied, times[message]
+    status = history_entry.get("status")
+    status_str = status.get("status_str") if isinstance(status, dict) else None
+    if status_str in (STATUS_SUCCESS, STATUS_ERROR):
+        return status_str, None
+    return None, None
+
+
+def _details(history_entry: dict) -> dict:
+    """What else the history entry says about how the run went."""
+    found: dict[str, Any] = {}
+    for name, data in _messages(history_entry):
+        if name == "execution_cached" and isinstance(data.get("nodes"), list):
+            # Cached nodes did not run this time. Worth recording: a run that
+            # reused most of its graph is not comparable with one that computed
+            # all of it.
+            found["cached_nodes"] = len(data["nodes"])
+        elif name == "execution_error":
+            found["error"] = {
+                key: data.get(key)
+                for key in ("node_id", "node_type", "exception_type", "exception_message")
+                if data.get(key) is not None
+            }
+    return found
+
+
+def finish_run(run: dict, history_entry: dict | None, memory: dict | None = None) -> dict:
+    """Complete a ``run`` block from the history entry ComfyUI recorded.
+
+    Derives the outcome and the wall-clock duration. ComfyUI keeps no per-node
+    timing of its own, so a run total is all that can honestly be reported from
+    here -- see the module notes on ``ProgressHandler`` for where finer timing
+    would have to come from.
+
+    A missing history entry means the wait gave up or the queue was cleared. The
+    status is then left as it was rather than guessed at.
+    """
+    finished = dict(run)
+    finished["ended_at"] = _timestamp()
+    if memory:
+        finished["memory_at_end"] = memory
+    if not isinstance(history_entry, dict):
+        return finished
+
+    times = {
+        name: int(data["timestamp"])
+        for name, data in _messages(history_entry)
+        if isinstance(data.get("timestamp"), (int, float))
+    }
+    outcome, ended = _outcome(times, history_entry)
+    if outcome is not None:
+        finished["status"] = outcome
+
+    started = times.get("execution_start")
+    if started is not None:
+        finished["started_at_ms"] = started
+        if ended is not None:
+            finished["ended_at_ms"] = ended
+            finished["duration_seconds"] = round((ended - started) / 1000, 3)
+
+    finished.update(_details(history_entry))
+    return finished
+
+
+def capture(
+    workflow: dict | None,
+    prompt: dict | None,
+    description: str = "",
+    run: dict | None = None,
+) -> dict:
     """Build the record for one run.
 
     ``workflow`` is ComfyUI's ``extra_pnginfo["workflow"]`` and ``prompt`` its
     hidden ``prompt``. Either may be missing -- a prompt submitted straight to
     the API carries no workflow -- and an absent one simply contributes nothing
     rather than failing the run.
+
+    ``description`` is the user's own one-line note, kept at the top level so a
+    reader (or a run-history list) can show it without walking the values.
+    ``run`` is the block from ``start_run``, completed later by ``finish_run``.
     """
     workflow = workflow if isinstance(workflow, dict) else {}
     prompt = prompt if isinstance(prompt, dict) else {}
@@ -212,7 +426,9 @@ def capture(workflow: dict | None, prompt: dict | None) -> dict:
         "format": FORMAT,
         "format_version": FORMAT_VERSION,
         "pack_version": PACK_VERSION,
+        "description": description.strip() if isinstance(description, str) else "",
         "saved_at": _timestamp(),
+        "run": run if isinstance(run, dict) else {},
         # All four scopes, so a reader can ask any of the questions they answer
         # without needing the workflow itself. `structure` gates a restore;
         # `layout` says whether two workflows are identical but for their
@@ -222,6 +438,23 @@ def capture(workflow: dict | None, prompt: dict | None) -> dict:
         "nodes": _node_values(workflow),
         "resolved": _resolved_inputs(prompt),
     }
+
+
+def _version_complaint(version: Any) -> str | None:
+    """Why a record's format version cannot be read, or ``None`` if it can."""
+    if not isinstance(version, int):
+        return "is missing a format version"
+    if version > FORMAT_VERSION:
+        return (
+            f"was written in format version {version}, which is newer than the "
+            f"{FORMAT_VERSION} this version of SouthernComfy understands"
+        )
+    if version < MINIMUM_FORMAT_VERSION:
+        return (
+            f"was written in format version {version}, which this version of "
+            "SouthernComfy no longer reads -- run the workflow again to record it afresh"
+        )
+    return None
 
 
 def validate(payload: Any) -> str | None:
@@ -240,14 +473,9 @@ def validate(payload: Any) -> str | None:
     if payload.get("format") != FORMAT:
         return "is not a SouthernComfy run inputs file"
 
-    version = payload.get("format_version")
-    if not isinstance(version, int):
-        return "is missing a format version"
-    if version > FORMAT_VERSION:
-        return (
-            f"was written in format version {version}, which is newer than the "
-            f"{FORMAT_VERSION} this version of SouthernComfy understands"
-        )
+    complaint = _version_complaint(payload.get("format_version"))
+    if complaint is not None:
+        return complaint
 
     for key, kind, complaint in (
         ("nodes", list, "has no node values"),
@@ -270,71 +498,150 @@ def _listing(names: list[str]) -> str:
     return f"{', '.join(names[:_MAX_NAMED])} and {len(names) - _MAX_NAMED} more"
 
 
-def describe_coverage(payload: dict, workflow: dict) -> str | None:
-    """Return why a record's values cannot be applied here, or ``None`` if they can.
+def _index(workflow: dict) -> tuple[dict, dict]:
+    """Live nodes keyed by (subgraph, id), and their ids grouped by type."""
+    by_key: dict[tuple, dict] = {}
+    by_type: dict[tuple, list[str]] = defaultdict(list)
+    for node, subgraph in iter_nodes(workflow):
+        node_id = str(node.get("id"))
+        by_key[(subgraph, node_id)] = node
+        by_type[(subgraph, str(node.get("type")))].append(node_id)
+    return by_key, by_type
 
-    The test is the restore's real precondition: every node the record holds
-    values for must still exist, with the same id and the same type. Nothing
-    else is required, because nothing else can stop a value going back where it
-    came from.
 
-    Comparing the ``structure`` digest instead -- the obvious first idea -- turns
-    out to be the wrong question, and wrong in a way that makes the feature hard
-    to use. That digest covers the whole graph, so *adding* a node invalidates a
-    record even though an addition cannot disturb the values of the nodes
-    already there. Adding ``SC Load Inputs`` itself is the sharpest case: a
-    record saved before the node was placed can never be loaded by it, which is
-    a catch with no way out. The same bites for a Note, or a new branch built
-    since the run. Restoring into a graph that has moved on is the ordinary
-    case, not the exceptional one, so the gate has to allow it.
+def _rematch(
+    group: list[dict], candidates: list[str], nodes: dict, subgraph: str | None
+) -> tuple[list[tuple[dict, str]], list[dict]]:
+    """Pair entries with same-type nodes that no id matched, without guessing.
 
-    What is deliberately still refused is a record whose nodes are *gone* or
-    have changed type. Those values have nowhere correct to land, and applying
-    the remainder silently would leave the workflow in a state that matches
-    neither the record nor what it was before.
+    Deleting a node and adding an identical one back gives it a *new* id --
+    ComfyUI never reuses one -- so a record can be left pointing at an id that
+    is gone even though the graph looks and behaves exactly as it did before.
+    Refusing outright would be unhelpful, and telling the user to put the node
+    back would be a lie: no amount of re-adding recovers the old id. Only an
+    undo does.
 
-    The residual risk this accepts: a record from an unrelated workflow could be
-    applied if every node it carries values for happened to match by id and
-    type. That needs a coincidence across the whole record, which is implausible
-    on any real graph -- and ``structure_differs`` still reports the difference,
-    so it is visible rather than hidden.
+    So an unmatched entry may claim a node of the same type, in the same
+    container, that no other entry has claimed -- but only where the choice is
+    forced. A title says which node the user meant, so those pair first; after
+    that a pairing is accepted only when exactly one entry and one candidate
+    remain. Two indistinguishable candidates are left unpaired rather than
+    guessed between, because putting a value silently on the wrong node is
+    worse than reporting that it could not be placed.
     """
-    present = {
-        (subgraph, str(node.get("id"))): node.get("type") for node, subgraph in iter_nodes(workflow)
-    }
+    paired: list[tuple[dict, str]] = []
+    remaining = list(candidates)
+    unpaired: list[dict] = []
 
-    missing: list[str] = []
-    retyped: list[str] = []
+    for entry in group:
+        title = entry.get("title")
+        match = None
+        if title:
+            match = next((n for n in remaining if nodes[(subgraph, n)].get("title") == title), None)
+        if match is None:
+            unpaired.append(entry)
+            continue
+        remaining.remove(match)
+        paired.append((entry, match))
+
+    if len(unpaired) == 1 and len(remaining) == 1:
+        paired.append((unpaired.pop(), remaining.pop()))
+
+    return paired, unpaired
+
+
+def plan_restore(payload: dict, workflow: dict) -> dict:
+    """Work out which live node each saved value belongs to.
+
+    Returns ``{"nodes": [...], "rematched": [...], "error": str | None}``. Every
+    planned entry carries the id of the node it is to be written to, so the
+    frontend has only to look nodes up and assign; each decision is made here,
+    where the record's format and the workflow are both understood.
+
+    The test applied is the restore's real precondition: each node holding saved
+    values must still be findable. Comparing the ``structure`` digest instead --
+    the obvious first idea -- asks the wrong question, and wrongly enough to
+    make the feature awkward to use. That digest covers the whole graph, so
+    *adding* a node invalidates a record even though an addition cannot disturb
+    values already in place. Adding ``SC Load Inputs`` itself is the sharpest
+    case: a record saved before the node was placed could never be loaded by it,
+    a catch with no way out. Restoring into a graph that has moved on is the
+    ordinary case, not the exception.
+
+    Still refused: a record whose nodes are gone, or replaced by something a
+    value cannot sensibly land on. Applying the remainder silently would leave
+    the workflow matching neither the record nor what it was before.
+
+    The residual risk accepted here is that a record from an unrelated workflow
+    could apply if every node it names happened to match by id and type. That
+    takes a coincidence across the whole record, and ``describe_change`` still
+    reports the difference, so it is visible rather than hidden.
+    """
+    nodes, by_type = _index(workflow)
+
+    claimed: set[tuple] = set()
+    planned: list[dict] = []
+    pending: list[dict] = []
+
     for entry in payload.get("nodes", []):
         if not isinstance(entry, dict):
             continue
-        found = present.get((entry.get("subgraph"), str(entry.get("id"))))
-        if found is None:
-            missing.append(_entry_label(entry))
-        elif str(found) != str(entry.get("type")):
-            retyped.append(_entry_label(entry))
+        key = (entry.get("subgraph"), str(entry.get("id")))
+        found = nodes.get(key)
+        if found is not None and str(found.get("type")) == str(entry.get("type")):
+            claimed.add(key)
+            planned.append({**entry, "rematched": False})
+        else:
+            pending.append(entry)
 
-    complaints = []
-    if missing:
-        complaints.append(f"nodes this workflow no longer has ({_listing(missing)})")
-    if retyped:
-        complaints.append(f"nodes that have changed type since ({_listing(retyped)})")
-    if not complaints:
-        return None
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+    for entry in pending:
+        groups[(entry.get("subgraph"), str(entry.get("type")))].append(entry)
 
-    return (
-        f"holds values for {' and '.join(complaints)}. Restore it into the workflow it "
-        f"came from, or save a fresh record from this one"
-    )
+    rematched: list[str] = []
+    unplaced: list[str] = []
+    skipped: list[str] = []
+    for (subgraph, node_type), group in groups.items():
+        candidates = [
+            n for n in by_type.get((subgraph, node_type), []) if (subgraph, n) not in claimed
+        ]
+        paired, leftover = _rematch(group, candidates, nodes, subgraph)
+        for entry, node_id in paired:
+            claimed.add((subgraph, node_id))
+            planned.append({**entry, "id": node_id, "rematched": True})
+            rematched.append(_entry_label(entry))
+        for entry in leftover:
+            # Only a node carrying widget *values* is worth refusing over. An
+            # entry holding nothing but properties -- a Reroute's orientation,
+            # a group-toggler's sort order -- is presentation this workflow can
+            # live without, and blocking every value in the file because one
+            # such node was deleted would be a poor trade.
+            (unplaced if entry.get("values") else skipped).append(_entry_label(entry))
+
+    error = None
+    if unplaced:
+        error = (
+            f"holds values for nodes this workflow no longer has ({_listing(unplaced)}). "
+            "Undo your changes to bring them back, or save a fresh record from this "
+            "workflow as it now stands"
+        )
+
+    return {"nodes": planned, "rematched": rematched, "skipped": skipped, "error": error}
 
 
-def structure_differs(payload: dict, checksums: dict) -> bool:
-    """Whether the workflow has been structurally edited since the record was saved.
+def describe_change(payload: dict, checksums: dict) -> str | None:
+    """Which kind of edit, if any, the workflow has had since the record was saved.
 
-    Advisory only. It is true whenever a node has been added, deleted or
-    rewired, which is perfectly compatible with a successful restore -- it is
-    worth saying out loud so a partial-looking result has an explanation.
+    Returns ``"structure"`` when nodes have been added, removed or rewired,
+    ``"layout"`` when only presentation has moved, and ``None`` when neither
+    has. Purely advisory: all three are compatible with a clean restore, and
+    naming the one that happened explains a result that might otherwise look
+    partial. ``inputs`` is deliberately not reported -- the values differing is
+    the entire reason for restoring.
     """
-    saved = payload.get("checksums", {}).get(EDIT_SCOPE)
-    current = checksums.get(EDIT_SCOPE)
-    return isinstance(saved, str) and isinstance(current, str) and saved != current
+    saved = payload.get("checksums", {})
+    for scope in EDIT_SCOPES:
+        here, there = saved.get(scope), checksums.get(scope)
+        if isinstance(here, str) and isinstance(there, str) and here != there:
+            return scope
+    return None

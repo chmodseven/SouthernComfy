@@ -76,7 +76,6 @@ __all__ = [
     "compute_all",
     "compute_checksum",
     "iter_nodes",
-    "short_form",
     "subgraph_ids",
 ]
 
@@ -89,9 +88,6 @@ INPUTS: Scope = "inputs"
 
 #: Selectable scopes, in the order they are offered to the user.
 SCOPES: tuple[Scope, ...] = (EVERYTHING, STRUCTURE, LAYOUT, INPUTS)
-
-#: Length of the abbreviated digest shown on a node face.
-_SHORT_LENGTH = 12
 
 #: Node types whose widget values are excluded from the ``INPUTS`` scope.
 #:
@@ -424,8 +420,3 @@ def compute_all(workflow: dict | None) -> dict[Scope, str]:
 def compute_checksum(workflow: dict | None, scope: Scope = EVERYTHING) -> str:
     """Return one scope's digest. Unknown scopes fall back to ``EVERYTHING``."""
     return compute_all(workflow).get(scope) or compute_all(workflow)[EVERYTHING]
-
-
-def short_form(digest: str) -> str:
-    """Abbreviate a digest for display on a node face."""
-    return digest[:_SHORT_LENGTH]

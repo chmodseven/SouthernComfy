@@ -21,7 +21,7 @@ import logging
 from functools import cache
 
 from .comfy_runtime import get_comfyui_version
-from .run_inputs import describe_coverage, structure_differs, validate
+from .run_inputs import describe_change, plan_restore, validate
 from .version import PACK_VERSION
 from .workflow_hash import compute_all
 
@@ -98,18 +98,25 @@ def register_routes() -> None:
         if not isinstance(workflow, dict):
             return web.json_response({"error": "Expected a 'workflow' object."}, status=400)
 
-        gap = describe_coverage(record, workflow)
-        if gap is not None:
+        plan = plan_restore(record, workflow)
+        if plan["error"] is not None:
             # 409: the file is perfectly valid, its values simply have nowhere
             # to land here. Worth distinguishing from a malformed one.
-            return web.json_response({"error": f"This file {gap}."}, status=409)
+            return web.json_response({"error": f"This file {plan['error']}."}, status=409)
 
         return web.json_response(
             {
-                "nodes": record["nodes"],
+                "nodes": plan["nodes"],
                 "saved_at": record.get("saved_at"),
+                "description": record.get("description") or "",
+                # Presentation-only state whose node has gone. Worth mentioning,
+                # never worth refusing over.
+                "skipped": plan["skipped"],
+                # Values that had to be matched by node type because their id
+                # was gone -- the graph was rebuilt rather than merely edited.
+                "rematched": plan["rematched"],
                 # Not a problem, but worth the user knowing: it explains why a
-                # graph that has grown since the run still restores cleanly.
-                "edited": structure_differs(record, compute_all(workflow)),
+                # graph that has moved on still restores cleanly.
+                "changed": describe_change(record, compute_all(workflow)),
             }
         )
