@@ -1,5 +1,6 @@
 /**
- * Persistent, saved filters on any dropdown -- base or third-party.
+ * SC Combo Filter -- persistent, saved filters on any dropdown, base or
+ * third-party.
  *
  * Long combo lists (checkpoints, LoRAs, samplers) are tedious to work in.
  * ComfyUI already offers an ad-hoc "Filter list" box while a dropdown is open,
@@ -289,7 +290,7 @@ function askForFilter(node, widget, event) {
 }
 
 app.registerExtension({
-    name: "SouthernComfy.FilteredCombo",
+    name: "SouthernComfy.ComboFilter",
 
     nodeCreated(node) {
         const widgets = comboWidgets(node);

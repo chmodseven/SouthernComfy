@@ -20,7 +20,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
   - [SC Version](#sc-version)
   - [SC Workflow Checksum](#sc-workflow-checksum)
 - [Enhancements](#enhancements)
-  - [Filtered dropdowns](#filtered-dropdowns)
+  - [SC Combo Filter](#sc-combo-filter)
 - [Example workflows](#example-workflows)
 - [Conventions](#conventions)
 - [Versioning](#versioning)
@@ -375,7 +375,7 @@ Set those widgets to `fixed` if you need the displayed and emitted values to agr
 
 Not every improvement wants to be a node. These attach to what is already there.
 
-### Filtered dropdowns
+### SC Combo Filter
 
 Sets a **persistent filter** on any dropdown — base or third-party — so a long list of
 checkpoints, LoRAs or samplers stays narrowed to what you actually use.
@@ -383,16 +383,28 @@ checkpoints, LoRAs or samplers stays narrowed to what you actually use.
 ComfyUI already offers an ad-hoc "Filter list" box while a dropdown is open, but it forgets what
 you typed as soon as you close it. This one is saved with the workflow.
 
-**Setting a filter** — right-click the node, choose **SC Combo Filter**, and pick the dropdown to
-filter. Enter either:
+**Setting a filter** — right-click the node and choose **SC Combo Filter**. The submenu lists every
+dropdown on that node; pick the one to filter.
+
+![Choosing SC Combo Filter from a node's right-click menu](assets/images/sc-combo-filter-1.png)
+
+Then enter the filter itself:
+
+![Entering a filter for the unet_name dropdown](assets/images/sc-combo-filter-2.png)
 
 | Filter | Matches |
 | --- | --- |
 | `qwen3` | Anything containing "qwen3", case-insensitive |
 | `/^sdxl/i` | A regular expression, between slashes, with the usual flags |
 
+The dropdown then offers only the matching entries:
+
+![The unet_name dropdown narrowed to the matching models](assets/images/sc-combo-filter-3.png)
+
 An empty filter clears it. A filtered dropdown shows its filter in the widget label, so an active
-filter is never invisible — `clip_name  [qwen3]`.
+filter is never invisible — `unet_name  [klein]`.
+
+![The filtered widget, its label showing the active filter](assets/images/sc-combo-filter-4.png)
 
 **Notes**
 
