@@ -9,9 +9,14 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from .save_inputs_node import SCSaveInputs
 from .version_node import SCVersion
 from .workflow_checksum_node import SCWorkflowChecksum
 
 __all__ = ["NODE_CLASSES"]
 
-NODE_CLASSES: tuple[type[io.ComfyNode], ...] = (SCVersion, SCWorkflowChecksum)
+NODE_CLASSES: tuple[type[io.ComfyNode], ...] = (
+    SCSaveInputs,
+    SCVersion,
+    SCWorkflowChecksum,
+)

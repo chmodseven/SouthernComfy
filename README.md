@@ -14,6 +14,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Installation](#installation)
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
+  - [SC Save Inputs](#sc-save-inputs)
   - [SC Version](#sc-version)
   - [SC Workflow Checksum](#sc-workflow-checksum)
 - [Enhancements](#enhancements)
@@ -78,8 +79,79 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 | Node | Category | Summary |
 | --- | --- | --- |
+| [**SC Save Inputs**](#sc-save-inputs) | `SouthernComfy/utils` | Writes every input value in the workflow to JSON on each run. |
 | [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
 | [**SC Workflow Checksum**](#sc-workflow-checksum) | `SouthernComfy/utils` | Live checksum of the workflow, over a selectable scope. |
+
+---
+
+### SC Save Inputs
+
+Writes every input value in the workflow to a JSON file in the output folder, each time the
+workflow runs — a record of what a run was actually invoked with. Load one back with
+**SC Load Inputs** to return to a run you liked.
+
+> **Screenshot pending.**
+
+Drop the node anywhere on the canvas. Nothing needs to be wired to it: the values it records reach
+it as metadata describing the whole prompt, not as inputs of its own, so where it sits makes no
+difference to what it captures.
+
+| Input | Type | Meaning |
+| --- | --- | --- |
+| `filename_prefix` | `STRING` | Where to write the file, relative to the output folder. Default `runs/run`. |
+
+**Inputs and outputs** — none besides the widget above. The node is an output node, which is what
+makes ComfyUI schedule it, but it produces nothing for anything else to consume.
+
+**The prefix works exactly as Save Image's does** — the same ComfyUI code produces it:
+
+- `runs/run` writes `output/runs/run_00001.json`, then `run_00002.json`, and so on. The number is
+  read from the folder, so it keeps counting across restarts and never overwrites an earlier run.
+- The date substitutions work too — `%year%`, `%month%`, `%day%`, `%hour%`, `%minute%`, `%second%`.
+  A prefix of `runs/%year%-%month%-%day%/run` starts a fresh numbered set each day.
+- A prefix that would write outside the output folder is refused.
+
+**What lands in the file**
+
+| Key | Contents |
+| --- | --- |
+| `format`, `format_version` | Identify the file as one of ours, and which shape it is in |
+| `pack_version` | The SouthernComfy version that wrote it |
+| `saved_at` | Local time of the run, with its UTC offset |
+| `checksums` | All four workflow checksums — `everything`, `structure`, `layout`, `inputs` |
+| `nodes` | Every widget value, node by node — the half that gets restored |
+| `resolved` | The literal values the backend actually received |
+
+`nodes` holds one entry per node that carries any value, keyed by widget name. Nodes inside a
+subgraph are captured as well, tagged with the body they came from; the subgraph's own instance
+node is skipped, since the widgets promoted onto it are copies of ones still held inside.
+
+`resolved` is the same run seen from the backend, and is never restored — it is the record of what
+happened. It can legitimately differ from `nodes`: a widget converted into an input still carries
+its last typed value in the workflow, while `resolved` shows the value that came down the wire.
+Frontend-only controls such as `control_after_generate` appear only in `nodes`.
+
+**Why all four checksums** — so the file can answer any of their questions without needing the
+workflow itself. `structure` decides whether the file still fits a workflow, and is the one
+SC Load Inputs compares: it changes precisely when saved values would no longer line up, and stays
+put when you have merely moved nodes or edited values. `layout` is the strict "identical but for
+the values" comparison, `inputs` fingerprints the values alone, and `everything` is the catch-all.
+See [SC Workflow Checksum](#sc-workflow-checksum) for what each scope covers.
+
+**Notes**
+
+- The node re-runs on every execution rather than being cached. It has to: ComfyUI decides what to
+  cache from a node's declared inputs, and this node's only declared input is where to write, while
+  what it records is the whole workflow. Cached, it would silently record nothing after the first
+  run.
+- Two of these in one workflow write two files, even with the same prefix.
+- The record describes the prompt **as submitted**. A widget set to `randomize` or `increment` is
+  advanced the instant you press Run, so what is saved is the value that actually ran rather than
+  the one now showing on the canvas.
+- A run started straight from the API carries no workflow metadata. The file is still written, with
+  `resolved` filled in and `nodes` empty.
+- Works under both the legacy renderer and Nodes 2.0.
 
 ---
 

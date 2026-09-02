@@ -65,14 +65,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from typing import Any
 
 __all__ = [
+    "OBSERVER_NODE_TYPES",
     "SCOPES",
     "Scope",
     "compute_all",
     "compute_checksum",
+    "iter_nodes",
     "short_form",
+    "subgraph_ids",
 ]
 
 Scope = str
@@ -90,6 +94,9 @@ _SHORT_LENGTH = 12
 
 #: Node types whose widget values are excluded from the ``INPUTS`` scope.
 #:
+#: Public because any module reading values out of a workflow needs to make the
+#: same exclusion -- ``southern_comfy.run_inputs`` does.
+#:
 #: A checksum node *displays* the digest it computes, and the frontend writes
 #: that displayed value into ``widgets_values`` even for a widget marked
 #: ``serialize: false``. Hashing it would make the digest self-referential: a
@@ -97,7 +104,7 @@ _SHORT_LENGTH = 12
 #: These nodes still count structurally -- adding or removing one is a real
 #: change to the graph -- but they contribute no values, because they observe
 #: the workflow rather than configure it.
-_OBSERVER_NODE_TYPES = frozenset({"SC_WorkflowChecksum"})
+OBSERVER_NODE_TYPES = frozenset({"SC_WorkflowChecksum"})
 
 #: A saved link is ``[link_id, origin_id, origin_slot, target_id, target_slot,
 #: type]``. Anything shorter is not one and is skipped.
@@ -157,24 +164,37 @@ def _subgraph_definitions(workflow: dict) -> list[dict]:
     return [s for s in subgraphs if isinstance(s, dict)] if isinstance(subgraphs, list) else []
 
 
-def _subgraph_ids(workflow: dict) -> frozenset[str]:
+def subgraph_ids(workflow: dict) -> frozenset[str]:
     """Ids of every defined subgraph, which double as the *type* of its instances."""
     return frozenset(
         str(s.get("id")) for s in _subgraph_definitions(workflow) if s.get("id") is not None
     )
 
 
-def _all_nodes(workflow: dict) -> list[dict]:
-    """Every node in the workflow, including those inside subgraph bodies.
+def iter_nodes(workflow: dict) -> Iterator[tuple[dict, str | None]]:
+    """Every node in the workflow, paired with the id of the subgraph holding it.
 
-    Packing a selection into a subgraph moves those nodes out of the top-level
-    ``nodes`` array and into a definition. Walking only the top level would make
-    their values vanish from the digest the moment they were packed away.
+    The second element is ``None`` for a node at the top level. Packing a
+    selection into a subgraph moves those nodes out of the top-level ``nodes``
+    array and into a definition, so walking only the top level would lose them
+    the moment they were packed away.
+
+    Public because reading values out of a workflow has to walk it the same way
+    hashing does -- ``southern_comfy.run_inputs`` needs the container id as well
+    as the node, to say where a captured value came from.
     """
-    nodes = _nodes(workflow)
+    for node in _nodes(workflow):
+        yield node, None
     for subgraph in _subgraph_definitions(workflow):
-        nodes.extend(_nodes(subgraph))
-    return nodes
+        container = subgraph.get("id")
+        container = str(container) if container is not None else None
+        for node in _nodes(subgraph):
+            yield node, container
+
+
+def _all_nodes(workflow: dict) -> list[dict]:
+    """Every node in the workflow, including those inside subgraph bodies."""
+    return [node for node, _ in iter_nodes(workflow)]
 
 
 def _all_links(workflow: dict) -> list:
@@ -350,7 +370,7 @@ def _inputs_payload(workflow: dict) -> list:
     node that carries values does change this digest, since the set of values in
     the workflow genuinely changed.
     """
-    subgraph_ids = _subgraph_ids(workflow)
+    packed = subgraph_ids(workflow)
 
     entries = []
     for node in _all_nodes(workflow):
@@ -358,7 +378,7 @@ def _inputs_payload(workflow: dict) -> list:
         # A subgraph *instance* node carries promoted copies of widgets that
         # live on the nodes inside it, and its type is a freshly minted UUID.
         # Both the duplicate values and the volatile type must stay out.
-        if node_type in _OBSERVER_NODE_TYPES or str(node_type) in subgraph_ids:
+        if node_type in OBSERVER_NODE_TYPES or str(node_type) in packed:
             continue
         values = _widget_values(node)
         if values is not None:
