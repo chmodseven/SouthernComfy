@@ -162,6 +162,12 @@ Set those widgets to `fixed` if you need the displayed and emitted values to agr
 - Some things never affect any scope, because they change for reasons unrelated to the workflow's
   content: link ids (reassigned freely without the wiring changing), canvas pan/zoom, and the
   computed execution `order` (ComfyUI recalculates it per run, so it drifts on its own).
+- **Also counted as `layout`:** native reroute waypoints (adding, moving or removing one) and
+  core's Parameters-sidebar favourites, both of which are saved in the workflow.
+- **Not counted:** `floatingLinks` (a link with a dangling end). `graph.serialize()` and the
+  workflow attached to a prompt do not always agree on that field, and hashing it risks the
+  displayed and executed digests disagreeing. A floating link cannot affect execution, and the
+  real link's removal is caught by `structure` anyway.
 - **Node `properties` are not hashed**, apart from those SouthernComfy owns — such as a saved
   dropdown filter. `properties` is an unpoliced grab-bag: as well as provenance (`ver`, `cnr_id`)
   and genuine settings, nodes stash *runtime results* there. Core's Save 3D Model writes the last

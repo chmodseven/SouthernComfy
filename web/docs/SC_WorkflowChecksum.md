@@ -66,6 +66,11 @@ content and would otherwise make two identical workflows appear different:
   hashed from those.
 - **The computed execution `order`** — ComfyUI recalculates it per run and breaks ties
   differently, so it drifts with nothing changed. What it encodes is the wiring, already hashed.
+- **`floatingLinks`** — a link with a dangling end. The two forms a workflow arrives in do not
+  always agree on this field, so hashing it would risk the displayed and executed digests
+  disagreeing. It cannot affect execution, and removing the real link is caught by `structure`.
+
+Native reroute waypoints and the Parameters-sidebar favourites **are** hashed, as `layout`.
 - **Link ids** — reassigned freely by the frontend when links are rebuilt, without the wiring
   itself changing. The endpoints are hashed instead.
 - **Canvas pan and zoom** — cosmetic in the strictest sense, but it changes merely from looking

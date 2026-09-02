@@ -51,6 +51,13 @@ between two genuinely identical workflows:
 * ``extra.ds`` -- the canvas pan and zoom. Cosmetic in the strictest sense, but
   it changes merely from looking around a workflow, which would make
   ``LAYOUT`` useless in practice.
+* ``extra.frontendVersion`` -- present only in the workflow attached to a
+  prompt, so hashing it would make the frontend and backend disagree outright.
+* ``floatingLinks`` -- links with a dangling end. Deliberately left out for the
+  same reason: ``graph.serialize()`` emits the key and the prompt's workflow
+  does not, so a graph that had one would hash differently on each side. The
+  cost is only a missed change, and a floating link cannot affect execution;
+  the real link's removal is caught by ``STRUCTURE`` regardless.
 * Node ids, in the ``INPUTS`` scope only -- see ``_inputs_payload``.
 """
 
@@ -310,7 +317,21 @@ def _cosmetic_payload(workflow: dict) -> list:
         found = subgraph.get("groups")
         groups.append(found if isinstance(found, list) else [])
 
-    return [nodes, groups]
+    # Native reroute waypoints. Presentation, not wiring: they are points a link
+    # is drawn through, and the link's endpoints are unchanged by them. Sorted,
+    # because their order in the array carries no meaning.
+    reroutes = []
+    for container in (workflow, *_subgraph_definitions(workflow)):
+        found = (container.get("extra") or {}).get("reroutes") or container.get("reroutes")
+        if isinstance(found, list):
+            reroutes.extend(found)
+    reroutes.sort(key=_canonical_json)
+
+    # Core's Parameters-sidebar favourites, stored in the workflow. Order is
+    # kept: the sidebar lets the user reorder them deliberately.
+    favourites = (workflow.get("extra") or {}).get("favoritedWidgets") or {}
+
+    return [nodes, groups, reroutes, favourites]
 
 
 def _inputs_payload(workflow: dict) -> list:
