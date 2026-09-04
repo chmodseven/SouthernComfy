@@ -299,6 +299,49 @@ const STYLE_RULES = `
 .lg-node-widgets:has(.sc-label) ~ .mt-auto { display: none !important; }
 `;
 
+/**
+ * Bring the selection ring and the resize handles up to where the text ends.
+ *
+ * Under Nodes 2.0 a node's element is **always** its logical height plus
+ * `NODE_TITLE_HEIGHT`, and it is positioned that far *above* the node's own y
+ * (`translate(x, y - NODE_TITLE_HEIGHT)`), so the strip a header would occupy
+ * is real layout whether or not a header is drawn. Nothing here can shorten it:
+ * the element's floor is `min-h-(--node-height)`, and that variable is the
+ * renderer's own arithmetic, rewritten on every layout change and every frame
+ * of a resize. Overriding it breaks resizing, because the same number is read
+ * back to work out the node's new size.
+ *
+ * What can be moved is everything the user actually sees. The ring is an
+ * overlay element and the four handles carry `data-corner`, so both can be
+ * pulled up by the space below the painted box -- a constant, being the title
+ * strip the node never draws plus the margins a widget sits inside:
+ *
+ *     NODE_TITLE_HEIGHT + NODE_CHROME + CONTAINER_INSET = 50
+ *
+ * The result is a node that rings and resizes at the corner where its text
+ * ends. Its clickable bounds are still the taller element -- that belongs to
+ * 2.0 -- but nothing draws there, so nothing shows it.
+ *
+ * If a future frontend renames these hooks the rules simply stop matching, and
+ * the ring and handles go back to the element's corners. Cosmetic, not broken.
+ */
+function deadSpaceRules() {
+    const titleStrip = window.LiteGraph?.NODE_TITLE_HEIGHT ?? 30;
+    const dead = titleStrip + NODE_CHROME + CONTAINER_INSET;
+    // Their own offsets, from 2.0: the ring sits at inset -3px, each handle at
+    // -4px (`-bottom-1`). Both are measured from the element's bottom, so the
+    // new offset is the dead space less the overhang each one already has.
+    return `
+[data-node-id]:has(.sc-label) [data-testid="node-state-outline-overlay"] {
+    bottom: ${dead - 3}px !important;
+}
+[data-node-id]:has(.sc-label) [data-corner="SE"],
+[data-node-id]:has(.sc-label) [data-corner="SW"] {
+    bottom: ${dead - 4}px !important;
+}
+`;
+}
+
 function installStyles() {
     const id = "sc-label-styles";
     if (document.getElementById(id)) {
@@ -306,7 +349,7 @@ function installStyles() {
     }
     const sheet = document.createElement("style");
     sheet.id = id;
-    sheet.textContent = STYLE_RULES;
+    sheet.textContent = STYLE_RULES + deadSpaceRules();
     document.head.append(sheet);
 }
 
