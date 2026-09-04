@@ -52,6 +52,36 @@ const CONTROL_VALUES = new Set(["fixed", "increment", "decrement", "randomize"])
  */
 const LINE_BREAK = String.fromCharCode(10);
 
+/**
+ * Keys never written onto a node, however a file spells them.
+ *
+ * Assigning `__proto__` replaces an object's prototype rather than adding a
+ * key, which would strip a node of every method LiteGraph gave it and take the
+ * canvas down with it; `constructor` and `prototype` are the same family of
+ * mistake. The server already drops these when it plans a restore -- see
+ * `UNSAFE_KEYS` in `run_inputs.py`, which is the authority -- and this is the
+ * same rule at the point of assignment, where the damage would be done.
+ */
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * LiteGraph's callback naming convention.
+ *
+ * `extra` is assigned straight onto the node, so a saved key called
+ * `onDrawForeground` or `onExecute` replaces a hook the canvas calls -- with a
+ * value out of a file, which LiteGraph then tries to call. No pack can be
+ * keeping state under one of these names, because the name already belongs to
+ * the callback it would shadow.
+ */
+const CALLBACK_KEY = /^on[A-Z]/;
+
+function refuseKey(entry, kind, key) {
+    console.warn(
+        `[SouthernComfy] Refusing to restore the ${kind} "${key}" onto ${entry.type}: ` +
+            `it would alter the node itself rather than its state.`,
+    );
+}
+
 function toast(severity, summary, detail) {
     const line = detail ? `${summary} - ${detail}` : summary;
     // Always logged, whatever the toast does: a toast is gone once dismissed,
@@ -250,6 +280,10 @@ function applyProperties(node, entry, report) {
     }
     node.properties ??= {};
     for (const [key, value] of Object.entries(entry.properties)) {
+        if (UNSAFE_KEYS.has(key)) {
+            refuseKey(entry, "property", key);
+            continue;
+        }
         try {
             if (typeof node.setProperty === "function") {
                 node.setProperty(key, value);
@@ -278,6 +312,14 @@ function applyExtra(node, entry, report) {
         return;
     }
     for (const [key, value] of Object.entries(entry.extra)) {
+        // A node's own serialised state is data. Anything landing on a hook --
+        // whether one the node already has, or one it has simply not needed yet
+        // -- is a file describing something other than what it claims to, and
+        // LiteGraph calling a restored string breaks the node on its next frame.
+        if (UNSAFE_KEYS.has(key) || CALLBACK_KEY.test(key) || typeof node[key] === "function") {
+            refuseKey(entry, "state", key);
+            continue;
+        }
         try {
             node[key] = value;
             report.extra += 1;
@@ -477,10 +519,22 @@ app.registerExtension({
             fileWidget.onClick = () => {};
 
             this.addWidget("button", BUTTON_WIDGET, null, () => {
-                loadInputs(fileWidget).catch((error) => {
-                    console.error("[SouthernComfy] The restore failed.", error);
-                    toast("error", "Could not load inputs", String(error?.message ?? error));
-                });
+                // One restore at a time. A restore waits twice -- for the file
+                // dialog, then for the server's plan -- and a second click
+                // during either would interleave two sets of values across the
+                // same widgets, in an order neither file describes.
+                if (this._scRestoring) {
+                    return;
+                }
+                this._scRestoring = true;
+                loadInputs(fileWidget)
+                    .catch((error) => {
+                        console.error("[SouthernComfy] The restore failed.", error);
+                        toast("error", "Could not load inputs", String(error?.message ?? error));
+                    })
+                    .finally(() => {
+                        this._scRestoring = false;
+                    });
             }, { serialize: false });
 
             const [width, height] = this.computeSize();

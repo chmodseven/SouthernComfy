@@ -41,6 +41,12 @@ function fetchVersions() {
         })
         .catch((error) => {
             console.error("[SouthernComfy] Could not read versions.", error);
+            // Only a *successful* answer is worth keeping. Caching the failure
+            // would make one unlucky moment permanent: a request that lost a
+            // race with the server starting up would leave this node, and every
+            // one added for the rest of the session, reading "unknown" with no
+            // way back but a page reload.
+            versionsRequest = null;
             return {};
         });
     return versionsRequest;
@@ -97,6 +103,12 @@ app.registerExtension({
             resize(this);
 
             fetchVersions().then((versions) => {
+                // The node may have been deleted while the request was in
+                // flight, in which case there is nothing left to fill in and
+                // no reason to force a repaint on its behalf.
+                if (!this.graph) {
+                    return;
+                }
                 ROWS.forEach(([, key], index) => {
                     widgets[index].value = versions[key] ?? UNKNOWN;
                 });

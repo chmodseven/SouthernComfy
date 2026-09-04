@@ -30,6 +30,26 @@ const DISPLAY_WIDGET = "checksum";
 const SCOPE_WIDGET = "scope";
 const PENDING = "…";
 const ELLIPSIS = "...";
+/**
+ * How often the graph is checked for a change.
+ *
+ * Polling, rather than reacting to events, and that is not for want of looking.
+ * `graph._version` moves for a node being added or removed and for nothing else
+ * -- measured: not for a widget edit, a node being dragged, a rename, or a
+ * property being written, which are exactly the edits the `inputs` and `layout`
+ * scopes exist to notice. Gating on it would freeze the digest during ordinary
+ * work while looking like it still worked.
+ *
+ * ComfyUI's own undo tracker answers the same question the same way: it
+ * serialises the whole graph and deep-compares it against the last one, on a
+ * 50ms debounce -- eight times more often than this, and more expensive each
+ * time. It gets away with knowing *when* to look only because core calls it
+ * from its own mutation sites throughout the frontend, which is not a signal an
+ * extension can subscribe to.
+ *
+ * Measured cost of one pass on the largest workflow in the corpus (137 nodes,
+ * 182KB of JSON): 0.96ms, so 2.4ms of main thread per second.
+ */
 const POLL_MS = 400;
 
 /** Characters of digest the node shows at its default width. */
@@ -84,16 +104,23 @@ function fitDigest(node, digest) {
         return digest;
     }
 
+    // The most characters that still fit, found by bisection. Text gets wider
+    // as it gets longer, so the fit is monotonic and a search is exact -- and
+    // this runs on every step of a resize drag, where measuring a 64-character
+    // digest one character at a time is sixty-odd measurements per mouse move.
     const ellipsisWidth = measure(ELLIPSIS);
-    let chars = 0;
-    while (
-        chars < digest.length &&
-        measure(digest.slice(0, chars + 1)) + ellipsisWidth <= available
-    ) {
-        chars += 1;
+    let fits = 0;
+    let tooMany = digest.length;
+    while (fits < tooMany) {
+        const chars = Math.ceil((fits + tooMany) / 2);
+        if (measure(digest.slice(0, chars)) + ellipsisWidth <= available) {
+            fits = chars;
+        } else {
+            tooMany = chars - 1;
+        }
     }
     // Always show something, however narrow the node has been dragged.
-    return digest.slice(0, Math.max(chars, 1)) + ELLIPSIS;
+    return digest.slice(0, Math.max(fits, 1)) + ELLIPSIS;
 }
 
 /** Width at which the node shows DEFAULT_CHARS of digest plus the ellipsis. */
@@ -142,7 +169,11 @@ async function refresh() {
         const response = await api.fetchApi("/southerncomfy/checksum", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ workflow: JSON.parse(serialised) }),
+            // The graph is already JSON text, and it is the largest thing here:
+            // parsing it back into objects only to stringify those objects
+            // again would walk a whole workflow twice for a result identical to
+            // wrapping the text as it stands.
+            body: `{"workflow":${serialised}}`,
         });
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);

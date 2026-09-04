@@ -54,6 +54,13 @@ Everything the file holds for each node, matched to the node it came from by **i
 Provenance properties (`ver`, `cnr_id`, `aux_id`, `models`) are never restored: they say which
 release of which pack a node came from, and ComfyUI maintains them itself.
 
+Neither is anything that would change a node rather than its settings. A run file is an ordinary
+JSON file, so it can be edited, shared, or written by a hosted ComfyUI somewhere else, and it is
+read on that basis: saved state named after one of LiteGraph's own hooks (`onExecute`,
+`onDrawForeground`, and so on) or after JavaScript's `__proto__` is refused rather than applied,
+both when a file is written and again when one is read. Nothing legitimate is lost — those names
+belong to the machinery of the node, not to any setting on it.
+
 It restores *state, not shape*. Your workflow keeps its own wiring, positions, titles and colours —
 nothing about the shape of the graph is touched. That is the difference between this and dragging a
 saved image onto the canvas, which replaces the whole workflow.

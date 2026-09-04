@@ -417,6 +417,9 @@ filter is never invisible — `unet_name  [klein]`.
   be reselected before the workflow will run.
 - The filter is stored in the node's `properties` as `sc_filter:<widget>`, so it saves and restores
   with the workflow. Nodes you have never filtered carry no trace of the feature.
+- **Refreshing picks up new models.** Pressing **R**, or the refresh button, re-reads the model
+  lists and the filter is re-applied to the new one — so a checkpoint downloaded mid-session shows
+  up straight away if it matches, without reloading the page or clearing the filter.
 - Because the filter attaches to the real widget, there is no `control_after_generate` widget to
   hide — that only appears on the primitive-node route this deliberately avoids.
 - Works under both the legacy renderer and Nodes 2.0.

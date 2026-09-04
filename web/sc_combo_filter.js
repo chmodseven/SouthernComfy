@@ -37,6 +37,36 @@ const REGEX_SYNTAX = /^\/(.*)\/([gimsuy]*)$/;
 const ORIGINALS = new WeakMap();
 
 /**
+ * The exact array this module last installed on a widget.
+ *
+ * Filtering works by replacing `options.values`, which makes the cached
+ * original the only remaining record of the full list -- and a cache of a list
+ * that something else owns goes stale. ComfyUI repopulates every model dropdown
+ * when the node definitions are refreshed (the Refresh button, or "R"), and a
+ * node with a dependent dropdown rebuilds its own options as its other widgets
+ * change. Either way the widget ends up holding a list this module did not put
+ * there, and treating a stale original as the truth would hide a newly
+ * downloaded checkpoint until the browser was reloaded.
+ *
+ * Identity is the test: anything that is not the array installed here came from
+ * elsewhere, and is the new full list.
+ */
+const INSTALLED = new WeakMap();
+
+/**
+ * The widget's own label, from before a filter was ever shown on it.
+ *
+ * A filter is displayed by appending to the label, so the label has to be put
+ * back when the filter is cleared -- and `undefined` is only the right answer
+ * for a widget that never had one. Some nodes label a widget differently from
+ * its name, and that is theirs to decide, not this module's to discard.
+ */
+const OWN_LABELS = new WeakMap();
+
+/** Closes the filter dialog currently on screen, if there is one. */
+let closeActivePrompt = null;
+
+/**
  * Last known pointer position, in viewport coordinates.
  *
  * Menus and dialogs are positioned from the event that opened them, but Nodes
@@ -89,10 +119,45 @@ function comboWidgets(node) {
 }
 
 function allValues(widget) {
-    if (!ORIGINALS.has(widget)) {
-        ORIGINALS.set(widget, [...widget.options.values]);
+    const current = widget.options.values;
+    if (!ORIGINALS.has(widget) || INSTALLED.get(widget) !== current) {
+        ORIGINALS.set(widget, [...current]);
     }
     return ORIGINALS.get(widget);
+}
+
+/** Put a list on the widget, and remember that this module is what put it there. */
+function install(widget, values) {
+    widget.options.values = values;
+    INSTALLED.set(widget, values);
+}
+
+/**
+ * Show a filter on a widget's label, remembering the label it had.
+ *
+ * Captured at the moment a filter is first shown rather than when the node is
+ * built: a node -- or another extension -- may set its own label after this one
+ * has seen the widget, and the label to put back is whatever was there last.
+ */
+function showFilterInLabel(widget, suffix) {
+    if (!OWN_LABELS.has(widget)) {
+        OWN_LABELS.set(widget, widget.label);
+    }
+    widget.label = `${OWN_LABELS.get(widget) ?? widget.name}  [${suffix}]`;
+}
+
+/**
+ * Take a filter back off a widget's label.
+ *
+ * Only a label this module wrote is undone. An unfiltered widget is left
+ * completely alone -- overwriting its label with the name it would have shown
+ * anyway is both pointless and a way to quietly discard someone else's.
+ */
+function clearFilterFromLabel(widget) {
+    if (OWN_LABELS.has(widget)) {
+        widget.label = OWN_LABELS.get(widget);
+        OWN_LABELS.delete(widget);
+    }
 }
 
 /**
@@ -145,21 +210,21 @@ function applyFilter(node, widget) {
     const match = makeMatcher(filter);
 
     if (!match) {
-        widget.options.values = [...original];
-        widget.label = undefined;
+        install(widget, [...original]);
+        clearFilterFromLabel(widget);
         return;
     }
 
     const kept = original.filter(match);
-    widget.options.values = kept;
+    install(widget, kept);
 
     if (kept.length === 0) {
         console.warn(
             `[SouthernComfy] Filter "${filter}" on "${widget.name}" matched nothing; the value has been cleared.`,
         );
-        widget.label = `${widget.name}  [${filter} — no match]`;
+        showFilterInLabel(widget, `${filter} — no match`);
     } else {
-        widget.label = `${widget.name}  [${filter}]`;
+        showFilterInLabel(widget, filter);
     }
 
     if (widget.value != null && !kept.includes(widget.value)) {
@@ -189,7 +254,12 @@ function applyAll(node) {
  * and lifecycle are ours.
  */
 function openPrompt({ title, value, at, onCommit }) {
-    document.querySelectorAll(".sc-filter-dialog").forEach((old) => old.remove());
+    // Closing the previous dialog properly, rather than merely removing its
+    // element. It holds a capture-phase listener on `document`, and an element
+    // taken out from under it leaves that listener attached for the rest of the
+    // session -- watching every pointer event on the page to close something
+    // that is already gone.
+    closeActivePrompt?.();
 
     const dialog = document.createElement("div");
     dialog.className = "graphdialog rounded sc-filter-dialog";
@@ -236,7 +306,11 @@ function openPrompt({ title, value, at, onCommit }) {
     function close() {
         document.removeEventListener("pointerdown", closeOnOutside, true);
         dialog.remove();
+        if (closeActivePrompt === close) {
+            closeActivePrompt = null;
+        }
     }
+    closeActivePrompt = close;
     function commit() {
         const entered = input.value;
         close();
@@ -291,6 +365,26 @@ function askForFilter(node, widget, event) {
 
 app.registerExtension({
     name: "SouthernComfy.ComboFilter",
+
+    /**
+     * Re-filter every dropdown after ComfyUI has repopulated the option lists.
+     *
+     * Pressing "R", or the Refresh button, re-reads the node definitions and
+     * replaces the values of every model dropdown on the canvas -- which throws
+     * away the filtered list this module installed. Without this, downloading a
+     * checkpoint and refreshing would leave each filtered dropdown showing
+     * everything again until the workflow was reloaded, which reads as the
+     * filter having been forgotten.
+     *
+     * `allValues` takes the replacement as the new full list, so the newly
+     * downloaded model is in scope for the filter rather than hidden behind a
+     * stale cache.
+     */
+    refreshComboInNodes() {
+        for (const node of app.graph?._nodes ?? []) {
+            applyAll(node);
+        }
+    },
 
     nodeCreated(node) {
         const widgets = comboWidgets(node);

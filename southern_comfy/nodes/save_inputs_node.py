@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+import tempfile
 
 import folder_paths
 from comfy_api.latest import io
@@ -131,8 +133,35 @@ class SCSaveInputs(io.ComfyNode):
 
     @staticmethod
     def _write(path: str, record: dict) -> None:
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(record, handle, indent=2, ensure_ascii=False)
+        """Write the record so a reader never sees a half-written file.
+
+        Every record is written twice -- once as the node executes and again
+        when the run ends -- and something is expected to be reading these
+        files: ``SC Load Inputs`` now, ``SC Run History`` listing a folder of
+        them next. A plain ``open(path, "w")`` truncates the old file first, so
+        a reader arriving mid-write finds a partial one, and ComfyUI being
+        closed during the second write would leave the completed record
+        truncated rather than merely lacking its outcome.
+
+        Writing to a temporary file in the same folder and renaming keeps the
+        old contents intact until the new ones are complete: ``os.replace`` is
+        atomic on Windows and POSIX alike, and same-folder means the rename
+        stays on one filesystem.
+        """
+        folder = os.path.dirname(path) or "."
+        descriptor, temporary = tempfile.mkstemp(
+            dir=folder, prefix=f".{os.path.basename(path)}.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(record, handle, indent=2, ensure_ascii=False)
+            os.replace(temporary, path)
+        except BaseException:
+            # The rename never happened, so the temporary file is the only trace
+            # of a failed write and must not be left behind in the output folder.
+            with contextlib.suppress(OSError):
+                os.unlink(temporary)
+            raise
 
     @classmethod
     def _complete(cls, path: str, record: dict, history: dict | None) -> None:

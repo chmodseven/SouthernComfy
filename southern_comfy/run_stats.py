@@ -59,7 +59,17 @@ _LOGGER = logging.getLogger("SouthernComfy")
 #: wait costs nothing while idle, but it must not outlive a genuinely long
 #: generation -- twelve hours is far past any real one, and giving up merely
 #: leaves the record saying the run was still going.
+#:
+#: The interval grows as the wait lengthens, which costs nothing in accuracy:
+#: the duration written into a record comes from ComfyUI's own timestamps, not
+#: from when the wait happened to notice, so a later poll delays only the second
+#: write of the file. It matters for the run that never lands in history at all
+#: -- one whose entry was cleared, say -- where a fixed half-second poll would
+#: wake eighty-six thousand times before giving up. Short runs, which are the
+#: common case, still see their outcome recorded within half a second.
 _POLL_SECONDS = 0.5
+_MAX_POLL_SECONDS = 15.0
+_POLL_GROWTH = 1.5
 _TIMEOUT_SECONDS = 12 * 60 * 60
 
 
@@ -162,11 +172,13 @@ def _await_history(prompt_id: str) -> dict | None:
         return None
 
     deadline = time.monotonic() + _TIMEOUT_SECONDS
+    interval = _POLL_SECONDS
     while time.monotonic() < deadline:
         entry = _history_entry(prompt_id)
         if entry is not None:
             return entry
-        time.sleep(_POLL_SECONDS)
+        time.sleep(interval)
+        interval = min(interval * _POLL_GROWTH, _MAX_POLL_SECONDS)
 
     _LOGGER.warning(
         "SouthernComfy gave up waiting for prompt %s to finish; its record keeps "

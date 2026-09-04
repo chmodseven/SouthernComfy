@@ -55,6 +55,7 @@ describe the run rather than to be replayed.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Iterator
 from datetime import datetime
@@ -121,6 +122,41 @@ _STRUCTURAL_KEYS = frozenset(
         "subgraph",
     }
 )
+
+#: Keys that must never be written onto a live node or into its ``properties``,
+#: whatever a file says.
+#:
+#: A restore assigns saved state straight onto the node the browser found, which
+#: is what makes it work for packs this one has never heard of. In JavaScript,
+#: three of those names are not ordinary keys: assigning ``__proto__`` replaces
+#: an object's prototype outright, and ``constructor`` and ``prototype`` are
+#: little better. A node whose prototype has been replaced has lost every method
+#: LiteGraph gave it, which breaks the canvas rather than merely the node.
+#:
+#: No node serialises state under these names, so nothing legitimate is lost by
+#: refusing them. They are dropped both when a record is written and when one is
+#: read, because a record is a file: it can be edited, shared, or arrive from a
+#: hosted ComfyUI, and the reader cannot assume this pack wrote it.
+UNSAFE_KEYS = frozenset({"__proto__", "constructor", "prototype"})
+
+#: Keys that must never be restored as ``extra``, on top of ``UNSAFE_KEYS``.
+#:
+#: ``extra`` is assigned directly onto the live node, so a key named like one of
+#: LiteGraph's callbacks -- ``onExecute``, ``onDrawForeground``, ``onRemoved``,
+#: any ``onSomething`` -- replaces a hook the canvas calls with whatever the file
+#: happened to hold. LiteGraph then calls a string, and the node throws on its
+#: next frame. A pack cannot legitimately keep state under one of these names for
+#: the same reason: the name is already taken by the callback it would shadow.
+#:
+#: This does not apply to ``properties``, which is an ordinary dictionary of the
+#: node's own; a key called ``onFoo`` in there shadows nothing.
+_CALLBACK_KEY = re.compile(r"^on[A-Z]")
+
+
+def _unsafe_extra(key: str) -> bool:
+    """Whether ``key`` would change the node itself rather than its state."""
+    return key in UNSAFE_KEYS or bool(_CALLBACK_KEY.match(str(key)))
+
 
 #: Scopes reported as an advisory when a record is applied to an edited graph,
 #: most significant first. Neither decides anything -- see ``plan_restore``
@@ -195,7 +231,11 @@ def _node_properties(node: dict) -> dict:
     properties = node.get("properties")
     if not isinstance(properties, dict):
         return {}
-    return {k: v for k, v in properties.items() if k not in PROVENANCE_PROPERTIES}
+    return {
+        k: v
+        for k, v in properties.items()
+        if k not in PROVENANCE_PROPERTIES and k not in UNSAFE_KEYS
+    }
 
 
 def _extra_state(node: dict) -> dict:
@@ -208,7 +248,9 @@ def _extra_state(node: dict) -> dict:
     internals.
     """
     return {
-        k: v for k, v in node.items() if k not in _STRUCTURAL_KEYS and not str(k).startswith("_")
+        k: v
+        for k, v in node.items()
+        if k not in _STRUCTURAL_KEYS and not _unsafe_extra(k) and not str(k).startswith("_")
     }
 
 
@@ -396,7 +438,10 @@ def finish_run(run: dict, history_entry: dict | None, memory: dict | None = None
         finished["started_at_ms"] = started
         if ended is not None:
             finished["ended_at_ms"] = ended
-            finished["duration_seconds"] = round((ended - started) / 1000, 3)
+            # Both stamps come from ComfyUI's own wall clock, so a clock
+            # correction landing mid-run can put the end before the start. A
+            # negative duration is never a fact worth recording.
+            finished["duration_seconds"] = max(0.0, round((ended - started) / 1000, 3))
 
     finished.update(_details(history_entry))
     return finished
@@ -550,6 +595,24 @@ def _rematch(
     return paired, unpaired
 
 
+def _vetted(entry: dict) -> dict:
+    """An entry with any state that must not be assigned to a node removed.
+
+    Capture already refuses these keys, so a record this pack wrote never
+    carries one. This is the read side, and it cannot make that assumption: a
+    record is a file on disk that may have been hand-edited, shared, or produced
+    somewhere else entirely. Dropping the key here means the frontend is handed
+    a plan it can apply without inspecting it, which is the arrangement the rest
+    of the restore relies on -- the browser applies, the server decides.
+    """
+    vetted = entry
+    for field, unsafe in (("properties", lambda k: k in UNSAFE_KEYS), ("extra", _unsafe_extra)):
+        values = vetted.get(field)
+        if isinstance(values, dict) and any(unsafe(k) for k in values):
+            vetted = {**vetted, field: {k: v for k, v in values.items() if not unsafe(k)}}
+    return vetted
+
+
 def plan_restore(payload: dict, workflow: dict) -> dict:
     """Work out which live node each saved value belongs to.
 
@@ -590,7 +653,7 @@ def plan_restore(payload: dict, workflow: dict) -> dict:
         found = nodes.get(key)
         if found is not None and str(found.get("type")) == str(entry.get("type")):
             claimed.add(key)
-            planned.append({**entry, "rematched": False})
+            planned.append({**_vetted(entry), "rematched": False})
         else:
             pending.append(entry)
 
@@ -608,7 +671,7 @@ def plan_restore(payload: dict, workflow: dict) -> dict:
         paired, leftover = _rematch(group, candidates, nodes, subgraph)
         for entry, node_id in paired:
             claimed.add((subgraph, node_id))
-            planned.append({**entry, "id": node_id, "rematched": True})
+            planned.append({**_vetted(entry), "id": node_id, "rematched": True})
             rematched.append(_entry_label(entry))
         for entry in leftover:
             # Only a node carrying widget *values* is worth refusing over. An
