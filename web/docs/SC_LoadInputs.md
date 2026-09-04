@@ -61,7 +61,7 @@ read on that basis: saved state named after one of LiteGraph's own hooks (`onExe
 both when a file is written and again when one is read. Nothing legitimate is lost — those names
 belong to the machinery of the node, not to any setting on it.
 
-It restores *state, not shape*. Your workflow keeps its own wiring, positions, titles and colours —
+It restores *state, not shape*. Your workflow keeps its own wiring, positions, titles and colors —
 nothing about the shape of the graph is touched. That is the difference between this and dragging a
 saved image onto the canvas, which replaces the whole workflow.
 
@@ -81,7 +81,7 @@ else can stop a value going back where it came from:
 | Since you saved | Result |
 | --- | --- |
 | You edited values | **Fine.** That is the whole point |
-| You moved, resized, recoloured or retitled nodes | **Fine** |
+| You moved, resized, recolored or retitled nodes | **Fine** |
 | You **added** nodes, or rewired existing ones | **Fine.** An addition cannot disturb values already there |
 | You **deleted** a node that had saved values | **Refused** |
 | You **changed the type** of a node that had saved values | **Refused** |
@@ -116,7 +116,7 @@ A change is still *reported*, with the distinction the checksums make available:
 | Message | Meaning |
 | --- | --- |
 | *The structure of this workflow has changed* | Nodes have been added, removed or rewired |
-| *This workflow has been rearranged … but its structure is unchanged* | Only positions, sizes, titles or colours moved |
+| *This workflow has been rearranged … but its structure is unchanged* | Only positions, sizes, titles or colors moved |
 
 Neither is a problem. They are there to explain a result that might otherwise look partial.
 

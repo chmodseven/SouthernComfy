@@ -16,7 +16,7 @@ _SCOPE_TOOLTIP = (
     "- structure: nodes, wiring and bypass state only. Unaffected by moving "
     "nodes or editing values, so it is the scope to compare before restoring "
     "saved input values.\n"
-    "- layout: as above plus positions, sizes, titles, colours, groups and "
+    "- layout: as above plus positions, sizes, titles, colors, groups and "
     "per-node settings, but still ignoring values.\n"
     "- inputs: the widget values alone, independent of node identity, so the "
     "same values digest the same after a node is re-added or a subgraph is "

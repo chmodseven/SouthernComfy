@@ -12,7 +12,7 @@ The output socket carries the full digest for downstream nodes.
 | --- | --- | --- |
 | `everything` | Structure, layout and values | Any change at all |
 | `structure` | Nodes, wiring, bypass/mute state | You add, delete, rewire or bypass a node |
-| `layout` | The above plus positions, sizes, titles, colours, collapsed state and groups | Also when you move, resize, recolour or group nodes |
+| `layout` | The above plus positions, sizes, titles, colors, collapsed state and groups | Also when you move, resize, recolor or group nodes |
 | `inputs` | Widget values only | You edit any value — or add/remove a node that had values |
 
 `structure` is the one to compare before restoring saved input values into a workflow, because it

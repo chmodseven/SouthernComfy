@@ -166,12 +166,15 @@ EDIT_SCOPES = ("structure", "layout")
 
 #: Node types whose own values are this pack's bookkeeping, not run parameters.
 #:
+#: ``SC_Label`` carries annotations rather than parameters: returning to an
+#: earlier run's values should never rewrite the notes made about it since.
+#:
 #: Beyond the observers, ``SC_SaveInputs`` is here for a reason of its own:
 #: restoring its ``filename_prefix`` would silently redirect where *future* runs
 #: are written. Returning to an old set of values should not quietly move the
 #: output folder, so its prefix is recorded under ``resolved`` -- where the run
 #: genuinely used it -- and left out of the restorable half.
-UNRESTORABLE_TYPES = OBSERVER_NODE_TYPES | frozenset({"SC_SaveInputs"})
+UNRESTORABLE_TYPES = OBSERVER_NODE_TYPES | frozenset({"SC_SaveInputs", "SC_Label"})
 
 #: Names listed in full before a complaint switches to "and N more".
 _MAX_NAMED = 5

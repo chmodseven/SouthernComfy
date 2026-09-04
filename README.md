@@ -2,7 +2,7 @@
 
 A supplemental pack of quality-of-life custom nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
-SouthernComfy is built to sit alongside a stock ComfyUI installation rather than replace parts of it. Every node follows core ComfyUI conventions for appearance, widgets, sockets, bypass and colour handling, and works under both the legacy LiteGraph renderer and the new **Nodes 2.0** (Vue) renderer.
+SouthernComfy is built to sit alongside a stock ComfyUI installation rather than replace parts of it. Every node follows core ComfyUI conventions for appearance, widgets, sockets, bypass and color handling, and works under both the legacy LiteGraph renderer and the new **Nodes 2.0** (Vue) renderer.
 
 All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and live under the **SouthernComfy** category.
 
@@ -14,6 +14,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 - [Installation](#installation)
 - [Requirements](#requirements)
 - [Node reference](#node-reference)
+  - [SC Label](#sc-label)
   - [What these two are for](#what-these-two-are-for)
   - [SC Load Inputs](#sc-load-inputs)
   - [SC Save Inputs](#sc-save-inputs)
@@ -32,7 +33,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
 
 - **No third-party dependencies.** The pack targets a stock ComfyUI portable install and the Python standard library. Nodes that wrap another pack detect it at runtime and degrade gracefully if it is absent.
 - **Renderer agnostic.** Nodes render correctly under both the legacy node renderer and Nodes 2.0.
-- **Core look and feel.** Standard widgets, sockets, tooltips, per-node help pages, and the usual bypass/mute/colour behaviour.
+- **Core look and feel.** Standard widgets, sockets, tooltips, per-node help pages, and the usual bypass/mute/color behaviour.
 - **Self-contained.** The pack adds its own nodes, its own HTTP route, and a frontend extension scoped to its own node types. It does not patch ComfyUI internals or alter how other packs behave.
 
 ---
@@ -81,10 +82,56 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 
 | Node | Category | Summary |
 | --- | --- | --- |
+| [**SC Label**](#sc-label) | `SouthernComfy/utils` | Text on the canvas with no title bar and no badge, for annotating a workflow. |
 | [**SC Load Inputs**](#sc-load-inputs) | `SouthernComfy/utils` | Restores the input values of an earlier run into this workflow. |
 | [**SC Save Inputs**](#sc-save-inputs) | `SouthernComfy/utils` | Writes every input value in the workflow to JSON on each run. |
 | [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
 | [**SC Workflow Checksum**](#sc-workflow-checksum) | `SouthernComfy/utils` | Live checksum of the workflow, over a selectable scope. |
+
+---
+
+### SC Label
+
+A piece of text on the canvas, with **no title bar and no badge** — for captioning a group, naming
+a branch, or leaving a word beside a wire.
+
+Every pack has a note node, and they all draw a titled, badged box. That is right for a note and
+wrong for a caption: a heading over a section of a workflow should look like writing on the canvas,
+rather than like another node in it.
+
+> **Screenshot pending** — to be added.
+
+**Double-click the text** to edit it. `Enter` or clicking away saves, `Shift+Enter` starts a new
+line, and `Escape` abandons the edit. Text wraps to the node's width and reflows as you resize; if
+there is more than fits, a slim scrollbar appears, taking its color from the text. Drag the label by
+anywhere on its body — there is no title bar to grab, so the whole node is the handle.
+
+**It grows with what you type**, a line at a time, so a caption being written stays on screen
+instead of scrolling away above the caret — and shrinks again as text is deleted. That stops the
+first time you resize the label yourself: from then on the size you chose is the size it keeps, and
+text beyond it scrolls.
+
+**Inputs and outputs** — none. The node never joins the execution graph.
+
+**Appearance** — a new label is **white text with no background at all**, sitting directly on the
+canvas. Right-click it for **SC Label Font Size**, **SC Label Text Color**, **SC Label Background
+Color** and **SC Label Reset Colors** — the color items open a swatch and a hex box at the pointer,
+with **None** for no background at all. Give it a background and the box appears. An empty label
+draws a faint dashed outline so it cannot become invisible and unselectable.
+
+The rest are ordinary node properties (`sc_text`, `sc_font_size`, `sc_align`, `sc_autosize`), saved
+with the workflow and edited in the properties panel under the legacy renderer. Nodes 2.0 has no
+properties panel, which is why the colors and the point size are on the menu.
+
+**Notes**
+
+- **Annotating is not configuring.** The text lives in node properties rather than widget values,
+  so editing a caption moves the workflow's `layout` checksum and leaves `inputs` and `structure`
+  untouched.
+- **`SC Load Inputs` never rewrites a label.** Returning to the values of an earlier run restores
+  parameters, not commentary.
+- Headerless in both renderers, and it needs no custom canvas drawing to be so: `title_mode` is a
+  standard LiteGraph property that core uses for its own `Reroute` node.
 
 ---
 
@@ -123,7 +170,7 @@ to write into another node's widgets. The restoring happens in the browser, agai
 values (including `control_after_generate`, and nodes inside subgraphs), **node properties**, and
 any custom state a node serialised of its own. Properties are set through `setProperty` where
 LiteGraph offers it, so a node that reacts to its own settings changing gets that chance.
-Provenance properties are never restored. State only: your wiring, positions, titles and colours
+Provenance properties are never restored. State only: your wiring, positions, titles and colors
 are untouched — that is the difference between this and dragging a saved image onto the canvas,
 which replaces the entire workflow.
 
@@ -135,7 +182,7 @@ values for must still be on the canvas, with the same id and type:
 | Since you saved | Result |
 | --- | --- |
 | You edited values | **Fine** — that is the whole point |
-| You moved, resized, recoloured or retitled nodes | **Fine** |
+| You moved, resized, recolored or retitled nodes | **Fine** |
 | You **added** nodes, or rewired existing ones | **Fine** — an addition cannot disturb values already there |
 | You **deleted** or **retyped** a node that had saved values | **Refused** — those values have nowhere correct to go |
 
@@ -155,7 +202,7 @@ names what was matched by type.
 
 **A change is reported, not refused**, with the distinction the checksums make available: *the
 structure has changed* (nodes added, removed or rewired) or *the workflow has been rearranged but
-its structure is unchanged* (only positions, sizes, titles or colours). Neither is a problem — they
+its structure is unchanged* (only positions, sizes, titles or colors). Neither is a problem — they
 explain a result that might otherwise look partial.
 
 **Afterwards** it reports how many values were restored and anything it could not do: node types
@@ -308,7 +355,7 @@ canvas — no run required.
 | --- | --- | --- |
 | `everything` | Structure, layout and values | Any change at all |
 | `structure` | Nodes, wiring, bypass/mute state | You add, delete, rewire or bypass a node |
-| `layout` | The above plus positions, sizes, titles, colours, collapsed state and groups | Also when you move, resize, recolour or group nodes |
+| `layout` | The above plus positions, sizes, titles, colors, collapsed state and groups | Also when you move, resize, recolor or group nodes |
 | `inputs` | Widget values only | You edit any value — or add/remove a node that had values |
 
 **Output** — `CHECKSUM` (`STRING`), the full SHA-256 hex digest for the selected scope.
@@ -362,7 +409,7 @@ Set those widgets to `fixed` if you need the displayed and emitted values to agr
   and genuine settings, nodes stash *runtime results* there. Core's Save 3D Model writes the last
   saved filename and a live camera position after every execution, which would otherwise change
   `layout` on every single run without you touching anything. Everything a node actually presents
-  — position, size, title, colour, collapsed state, groups — has its own field and is hashed
+  — position, size, title, color, collapsed state, groups — has its own field and is hashed
   from there.
 - An `SC Workflow Checksum` node contributes no values of its own to the `inputs` scope — it
   observes the workflow rather than configuring it, and hashing the digest it displays would make

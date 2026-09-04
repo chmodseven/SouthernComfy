@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from .label_node import SCLabel
 from .load_inputs_node import SCLoadInputs
 from .save_inputs_node import SCSaveInputs
 from .version_node import SCVersion
@@ -17,6 +18,7 @@ from .workflow_checksum_node import SCWorkflowChecksum
 __all__ = ["NODE_CLASSES"]
 
 NODE_CLASSES: tuple[type[io.ComfyNode], ...] = (
+    SCLabel,
     SCLoadInputs,
     SCSaveInputs,
     SCVersion,

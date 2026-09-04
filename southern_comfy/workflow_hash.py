@@ -16,7 +16,7 @@ Four scopes are produced, answering four different questions:
     a workflow, because it is exactly the thing that would invalidate them.
 
 ``LAYOUT``
-    ``STRUCTURE`` plus presentation: positions, sizes, titles, colours,
+    ``STRUCTURE`` plus presentation: positions, sizes, titles, colors,
     collapsed state and groups. For asking "are these two workflows identical
     in every respect except the values typed into them?".
 
@@ -130,7 +130,7 @@ _LINK_FIELDS = 6
 #: chasing each pack's chosen key names would be endless. So only properties
 #: this pack owns are hashed: their meaning is known, and they change only when
 #: the user deliberately sets one. Everything a node genuinely presents --
-#: position, size, title, colour, collapsed state, groups -- has its own field
+#: position, size, title, color, collapsed state, groups -- has its own field
 #: and is hashed from there, so little is lost.
 _OWNED_PROPERTY_PREFIX = "sc_"
 
