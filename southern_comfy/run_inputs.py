@@ -61,8 +61,16 @@ from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
 
+from .constants import (
+    CHECKSUM_EDIT_SCOPES,
+    STATUS_ERROR,
+    STATUS_INTERRUPTED,
+    STATUS_RUNNING,
+    STATUS_SUCCESS,
+    UNRESTORABLE_TYPES,
+)
 from .version import PACK_VERSION
-from .workflow_hash import OBSERVER_NODE_TYPES, compute_all, iter_nodes, subgraph_ids
+from .workflow_hash import compute_all, iter_nodes, subgraph_ids
 
 __all__ = [
     "FORMAT",
@@ -158,24 +166,6 @@ def _unsafe_extra(key: str) -> bool:
     return key in UNSAFE_KEYS or bool(_CALLBACK_KEY.match(str(key)))
 
 
-#: Scopes reported as an advisory when a record is applied to an edited graph,
-#: most significant first. Neither decides anything -- see ``plan_restore``
-#: for why a whole-graph digest makes a poor gate -- but naming the kind of
-#: change costs nothing and explains a surprising-looking result.
-EDIT_SCOPES = ("structure", "layout")
-
-#: Node types whose own values are this pack's bookkeeping, not run parameters.
-#:
-#: ``SC_Label`` carries annotations rather than parameters: returning to an
-#: earlier run's values should never rewrite the notes made about it since.
-#:
-#: Beyond the observers, ``SC_SaveInputs`` is here for a reason of its own:
-#: restoring its ``filename_prefix`` would silently redirect where *future* runs
-#: are written. Returning to an old set of values should not quietly move the
-#: output folder, so its prefix is recorded under ``resolved`` -- where the run
-#: genuinely used it -- and left out of the restorable half.
-UNRESTORABLE_TYPES = OBSERVER_NODE_TYPES | frozenset({"SC_SaveInputs", "SC_Label"})
-
 #: Names listed in full before a complaint switches to "and N more".
 _MAX_NAMED = 5
 
@@ -223,7 +213,7 @@ def _node_properties(node: dict) -> dict:
 
     Only provenance is dropped. The rest is kept even where it looks like
     runtime state rather than configuration, because the two cannot be told
-    apart by inspection -- the lesson ``_OWNED_PROPERTY_PREFIX`` in
+    apart by inspection -- the lesson ``_OWNED_PROPERTIES`` in
     ``workflow_hash`` records -- and because putting a node back exactly as it
     was is the point here. Restoring a stale reading is harmless; the node
     overwrites it on its next run.
@@ -327,11 +317,6 @@ def _resolved_inputs(prompt: dict) -> dict[str, dict]:
 
     return resolved
 
-
-STATUS_RUNNING = "running"
-STATUS_SUCCESS = "success"
-STATUS_ERROR = "error"
-STATUS_INTERRUPTED = "interrupted"
 
 #: Execution messages ComfyUI stamps into a history entry, and the status each
 #: one implies. Every message carries a millisecond ``timestamp``.
@@ -706,7 +691,7 @@ def describe_change(payload: dict, checksums: dict) -> str | None:
     the entire reason for restoring.
     """
     saved = payload.get("checksums", {})
-    for scope in EDIT_SCOPES:
+    for scope in CHECKSUM_EDIT_SCOPES:
         here, there = saved.get(scope), checksums.get(scope)
         if isinstance(here, str) and isinstance(there, str) and here != there:
             return scope

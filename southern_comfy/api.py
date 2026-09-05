@@ -21,6 +21,7 @@ import logging
 from functools import cache
 
 from .comfy_runtime import get_comfyui_version
+from .constants import CHECKSUM_ROUTE, RESTORE_ROUTE, VERSIONS_ROUTE
 from .run_inputs import describe_change, plan_restore, validate
 from .version import PACK_VERSION
 from .workflow_hash import compute_all
@@ -28,10 +29,6 @@ from .workflow_hash import compute_all
 __all__ = ["CHECKSUM_ROUTE", "RESTORE_ROUTE", "VERSIONS_ROUTE", "register_routes"]
 
 _LOGGER = logging.getLogger("SouthernComfy")
-
-VERSIONS_ROUTE = "/southerncomfy/versions"
-CHECKSUM_ROUTE = "/southerncomfy/checksum"
-RESTORE_ROUTE = "/southerncomfy/restore"
 
 
 @cache

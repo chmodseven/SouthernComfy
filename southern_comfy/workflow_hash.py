@@ -43,7 +43,7 @@ the workflow's content, and including them would produce digests that differ
 between two genuinely identical workflows:
 
 * Every node ``property`` except those this pack owns -- see
-  ``_OWNED_PROPERTY_PREFIX`` for why the field cannot be trusted as a whole.
+  ``_OWNED_PROPERTIES`` for why the field cannot be trusted as a whole.
   That covers provenance (``ver``, ``cnr_id``, ``aux_id``), which would
   invalidate every saved checksum the moment a node pack updated, and equally
   the runtime results some nodes write there after each execution.
@@ -69,9 +69,20 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
+from .constants import (
+    CHECKSUM_EVERYTHING,
+    CHECKSUM_INPUTS,
+    CHECKSUM_LAYOUT,
+    CHECKSUM_SCOPES,
+    CHECKSUM_STRUCTURE,
+    OBSERVER_NODE_TYPES,
+    OWNED_PROPERTIES,
+    PACK_NODE_TYPES,
+)
+
 __all__ = [
+    "CHECKSUM_SCOPES",
     "OBSERVER_NODE_TYPES",
-    "SCOPES",
     "Scope",
     "compute_all",
     "compute_checksum",
@@ -81,58 +92,9 @@ __all__ = [
 
 Scope = str
 
-EVERYTHING: Scope = "everything"
-STRUCTURE: Scope = "structure"
-LAYOUT: Scope = "layout"
-INPUTS: Scope = "inputs"
-
-#: Selectable scopes, in the order they are offered to the user.
-SCOPES: tuple[Scope, ...] = (EVERYTHING, STRUCTURE, LAYOUT, INPUTS)
-
-#: Node types whose widget values are excluded from the ``INPUTS`` scope.
-#:
-#: Public because any module reading values out of a workflow needs to make the
-#: same exclusion -- ``southern_comfy.run_inputs`` does.
-#:
-#: These nodes still count structurally -- adding or removing one is a real
-#: change to the graph -- but they contribute no values, because each observes
-#: or acts on the workflow rather than configuring the run. Both would otherwise
-#: make a digest chase its own tail:
-#:
-#: ``SC_WorkflowChecksum``
-#:     *Displays* the digest it computes, and the frontend writes that displayed
-#:     value into ``widgets_values`` even for a widget marked ``serialize:
-#:     false``. Hashing it would be self-referential -- a new checksum changes
-#:     the workflow, which changes the checksum, without end.
-#:
-#: ``SC_LoadInputs``
-#:     Notes which file it last restored from. That is a record of a UI action,
-#:     not a setting any run uses. Hashing it would mean that restoring a saved
-#:     record changed the very digest being restored towards, so a workflow
-#:     could never match the ``INPUTS`` digest of the file it was restored from
-#:     -- destroying the one property that makes the comparison worth making.
-OBSERVER_NODE_TYPES = frozenset({"SC_WorkflowChecksum", "SC_LoadInputs"})
-
 #: A saved link is ``[link_id, origin_id, origin_slot, target_id, target_slot,
 #: type]``. Anything shorter is not one and is skipped.
 _LINK_FIELDS = 6
-
-#: Prefix marking a node property this pack owns and is willing to hash.
-#:
-#: ``properties`` is an unpoliced grab-bag. ComfyUI and third-party packs use it
-#: for provenance (``ver``, ``cnr_id``), for genuine UI configuration -- and,
-#: fatally, for **runtime results**. Core's ``SaveGLB`` writes ``Last Time Model
-#: File``, ``Last Time Model Folder`` and a live ``Camera Config`` there after
-#: every execution, so a graph containing one produced a different ``LAYOUT``
-#: digest on every single run without the user touching anything.
-#:
-#: There is no way to tell configuration from runtime state by inspection, and
-#: chasing each pack's chosen key names would be endless. So only properties
-#: this pack owns are hashed: their meaning is known, and they change only when
-#: the user deliberately sets one. Everything a node genuinely presents --
-#: position, size, title, color, collapsed state, groups -- has its own field
-#: and is hashed from there, so little is lost.
-_OWNED_PROPERTY_PREFIX = "sc_"
 
 
 def _canonical_json(payload: Any) -> str:
@@ -310,14 +272,17 @@ def _structure_payload(workflow: dict) -> list:
 
 
 def _stable_properties(node: dict) -> dict:
-    """Only the node properties this pack owns; see ``_OWNED_PROPERTY_PREFIX``."""
+    """Only the node properties this pack owns on its own nodes; see ``OWNED_PROPERTIES``."""
+    node_type = str(node.get("type", ""))
+    if node_type not in PACK_NODE_TYPES:
+        return {}
     properties = node.get("properties")
     if not isinstance(properties, dict):
         return {}
-    return {k: v for k, v in properties.items() if str(k).startswith(_OWNED_PROPERTY_PREFIX)}
+    return {k: v for k, v in properties.items() if k in OWNED_PROPERTIES}
 
 
-def _cosmetic_payload(workflow: dict) -> list:
+def _layout_payload(workflow: dict) -> list:
     """Presentation only: where things sit, how they look, how they are set up."""
     nodes = [
         {
@@ -406,17 +371,17 @@ def compute_all(workflow: dict | None) -> dict[Scope, str]:
         workflow = {}
 
     structure = _structure_payload(workflow)
-    cosmetics = _cosmetic_payload(workflow)
+    layout = _layout_payload(workflow)
     inputs = _inputs_payload(workflow)
 
     return {
-        STRUCTURE: _digest(structure),
-        LAYOUT: _digest([structure, cosmetics]),
-        INPUTS: _digest(inputs),
-        EVERYTHING: _digest([structure, cosmetics, inputs]),
+        CHECKSUM_STRUCTURE: _digest(structure),
+        CHECKSUM_LAYOUT: _digest([structure, layout]),
+        CHECKSUM_INPUTS: _digest(inputs),
+        CHECKSUM_EVERYTHING: _digest([structure, layout, inputs]),
     }
 
 
-def compute_checksum(workflow: dict | None, scope: Scope = EVERYTHING) -> str:
-    """Return one scope's digest. Unknown scopes fall back to ``EVERYTHING``."""
-    return compute_all(workflow).get(scope) or compute_all(workflow)[EVERYTHING]
+def compute_checksum(workflow: dict | None, scope: Scope = CHECKSUM_EVERYTHING) -> str:
+    """Return one scope's digest. Unknown scopes fall back to ``CHECKSUM_EVERYTHING``."""
+    return compute_all(workflow).get(scope) or compute_all(workflow)[CHECKSUM_EVERYTHING]

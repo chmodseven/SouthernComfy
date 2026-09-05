@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
-from ..workflow_hash import SCOPES, compute_checksum
+from ..workflow_hash import CHECKSUM_SCOPES, compute_checksum
 
 __all__ = ["SCWorkflowChecksum"]
 
@@ -69,8 +69,8 @@ class SCWorkflowChecksum(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "scope",
-                    options=list(SCOPES),
-                    default=SCOPES[0],
+                    options=list(CHECKSUM_SCOPES),
+                    default=CHECKSUM_SCOPES[0],
                     tooltip=_SCOPE_TOOLTIP,
                 ),
             ],

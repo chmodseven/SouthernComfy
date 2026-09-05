@@ -162,7 +162,7 @@ function paint() {
 }
 
 async function refresh() {
-    if (inFlight || instances.size === 0 || !app.graph) {
+    if (document.hidden || inFlight || instances.size === 0 || !app.graph) {
         return;
     }
 
