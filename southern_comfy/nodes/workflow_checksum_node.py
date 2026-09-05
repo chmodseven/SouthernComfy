@@ -11,7 +11,7 @@ __all__ = ["SCWorkflowChecksum"]
 # Scope labels shown to the user. The stored value is the scope key itself, so
 # a saved workflow keeps working if these descriptions are ever reworded.
 _SCOPE_TOOLTIP = (
-    "What the checksum covers.\n"
+    "What the checksum covers:\n"
     "- everything: any change at all.\n"
     "- structure: nodes, wiring and bypass state only. Unaffected by moving "
     "nodes or editing values, so it is the scope to compare before restoring "
@@ -23,11 +23,11 @@ _SCOPE_TOOLTIP = (
     "packed and unpacked.\n"
     "\n"
     "Note: any widget set to randomize or increment -- a KSampler seed, "
-    "typically -- is advanced by ComfyUI the moment you press Run. The inputs "
-    "and everything scopes therefore change with every run, and the value on "
-    "this node is one step ahead of the value its output sent downstream, "
-    "which describes the workflow that actually ran. Set such widgets to fixed "
-    "if you need the two to agree."
+    "typically -- is advanced by ComfyUI the moment you press Run. The 'inputs' "
+    "and 'everything' scopes therefore change with every run, and the value on "
+    "the checksum node's face will be one step ahead of the value its output "
+    "sent downstream, which describes the workflow that actually ran. Set such "
+    "widgets to fixed if you need the two to agree."
 )
 
 

@@ -284,7 +284,7 @@ def _structure_payload(workflow: dict) -> list:
         }
         for node in _all_nodes(workflow)
     ]
-    nodes.sort(key=_canonical_json)
+    nodes.sort(key=lambda n: (n["id"], str(n.get("type")), str(n.get("mode"))))
 
     slots = _slot_names(workflow)
     wiring = []
@@ -304,7 +304,7 @@ def _structure_payload(workflow: dict) -> list:
                     link[5],
                 ]
             )
-    wiring.sort(key=_canonical_json)
+    wiring.sort(key=lambda w: (str(w[0]), str(w[1]), str(w[2]), str(w[3]), str(w[4])))
 
     return [nodes, wiring]
 
@@ -337,7 +337,7 @@ def _cosmetic_payload(workflow: dict) -> list:
         }
         for node in _all_nodes(workflow)
     ]
-    nodes.sort(key=_canonical_json)
+    nodes.sort(key=lambda n: n["id"])
 
     groups = [workflow.get("groups") if isinstance(workflow.get("groups"), list) else []]
     for subgraph in _subgraph_definitions(workflow):
@@ -391,7 +391,7 @@ def _inputs_payload(workflow: dict) -> list:
         if values is not None:
             entries.append([node_type, values])
 
-    entries.sort(key=_canonical_json)
+    entries.sort(key=lambda e: (str(e[0]), _canonical_json(e[1])))
     return entries
 
 

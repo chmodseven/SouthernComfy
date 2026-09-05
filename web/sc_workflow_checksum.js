@@ -26,10 +26,14 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const NODE_TYPE = "SC_WorkflowChecksum";
-const DISPLAY_WIDGET = "checksum";
 const SCOPE_WIDGET = "scope";
-const PENDING = "…";
+const DISPLAY_WIDGET = "checksum";
+const CHECKSUM_TOOLTIP =
+    "Live SHA-256 checksum of the workflow for the selected scope.\n" +
+    "Widen the node to reveal any trailing characters truncated by the ellipsis.";const PENDING = "…";
 const ELLIPSIS = "...";
+const TIMEOUT = 5000; // 5-second safety limit
+
 /**
  * How often the graph is checked for a change.
  *
@@ -73,10 +77,15 @@ let timer = null;
 
 /** Offscreen context used purely to measure text; never drawn to screen. */
 const ruler = document.createElement("canvas").getContext("2d");
+let lastFont = null;
 
 function measure(text) {
     const lg = window.LiteGraph;
-    ruler.font = `${lg?.NODE_TEXT_SIZE ?? 14}px ${lg?.NODE_FONT ?? "Arial"}`;
+    const font = `${lg?.NODE_TEXT_SIZE ?? 14}px ${lg?.NODE_FONT ?? "Arial"}`;
+    if (font !== lastFont) {
+        ruler.font = font;
+        lastFont = font;
+    }
     return ruler.measureText(text).width;
 }
 
@@ -142,8 +151,13 @@ function paintNode(node) {
 
 function paint() {
     for (const node of instances) {
+        if (!node.graph) {
+            instances.delete(node);
+            continue;
+        }
         paintNode(node);
     }
+    stopPolling();
     app.graph?.setDirtyCanvas(true, false);
 }
 
@@ -174,6 +188,7 @@ async function refresh() {
             // again would walk a whole workflow twice for a result identical to
             // wrapping the text as it stands.
             body: `{"workflow":${serialised}}`,
+            signal: AbortSignal.timeout(TIMEOUT),
         });
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -216,7 +231,9 @@ app.registerExtension({
             const display = this.addWidget("text", DISPLAY_WIDGET, PENDING, () => {}, {
                 serialize: false,
                 read_only: true,
+                tooltip: CHECKSUM_TOOLTIP,
             });
+            display.tooltip = CHECKSUM_TOOLTIP; // Ensures compatibility across both LiteGraph and Nodes 2.0
             display.onClick = () => {};
 
             // Repaint immediately on a scope change: every scope's digest is
@@ -226,7 +243,8 @@ app.registerExtension({
                 const previous = scope.callback;
                 scope.callback = function () {
                     const result = previous?.apply(this, arguments);
-                    paint();
+                    paintNode(this);
+                    app.graph?.setDirtyCanvas(true, false);
                     return result;
                 };
             }
@@ -237,6 +255,7 @@ app.registerExtension({
             this.onResize = function () {
                 const result = onResize?.apply(this, arguments);
                 paintNode(this);
+                app.graph?.setDirtyCanvas(true, false);
                 return result;
             };
 
