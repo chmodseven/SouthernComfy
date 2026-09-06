@@ -57,6 +57,15 @@ the only way to be sure of where it appears.
 A new label is **white text with no background at all** -- it sits directly on the canvas, with no
 box, no title bar and no badge. Give it a background color and the box appears.
 
+**ComfyUI's own colour menu works too**, and the two ways of colouring a label do not fight: whichever
+you used last is the one that stands. Pick a colour from ComfyUI's palette and it becomes the label's
+background; pick one from **SC Label Background Color** and it replaces whatever the palette had set.
+*No color* puts the label back to no background at all.
+
+**Shapes** follow ComfyUI's **Shape** menu under Nodes 2.0 — *Box*, *Round* or *Card* — and the
+selection outline keeps the same shape. (The legacy renderer currently ignores that menu for every
+node, its own included; that is a bug in ComfyUI rather than in this one.)
+
 The remaining settings are ordinary node properties, edited in the properties panel under the
 legacy renderer (right-click -> **Properties Panel**); Nodes 2.0 has no properties panel, so the
 colors above are on the menu instead.

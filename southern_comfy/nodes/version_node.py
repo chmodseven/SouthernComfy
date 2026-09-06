@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from ..constants import NODE_TYPE_VERSION
+
 __all__ = ["SCVersion"]
 
 
@@ -19,7 +21,7 @@ class SCVersion(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="SC_Version",
+            node_id=NODE_TYPE_VERSION,
             display_name="SC Version",
             category="SouthernComfy/utils",
             description=(

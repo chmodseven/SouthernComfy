@@ -32,6 +32,7 @@
 
 // Served from /extensions/SouthernComfy/, so "../../" is the ComfyUI web root.
 import { app } from "../../scripts/app.js";
+import { bodyRadius, chainAccessor, paintRadius, ringRadius } from "./sc_ui.js";
 
 const NODE_TYPE = "SC_Label";
 
@@ -110,6 +111,16 @@ const CONTAINER_INSET = 2;
  * of lines for the same node size.
  */
 const NODE_CHROME = 18;
+
+/**
+ * What Nodes 2.0 keeps between the node's edge and its widget's, per side.
+ *
+ * Measured: 260-wide node, 236-wide element. It is the widget grid's 12px socket
+ * column on the left and its `pr-3` on the right. The legacy renderer's own
+ * inset is 10, but only 2.0 draws a selection ring, so 12 is the figure the ring
+ * rules need.
+ */
+const VUE_WIDGET_INSET = 12;
 
 /** Width of the label's own scrollbar, and of the thumb inside it. */
 const BAR_WIDTH = 10;
@@ -331,14 +342,31 @@ function deadSpaceRules() {
     // Their own offsets, from 2.0: the ring sits at inset -3px, each handle at
     // -4px (`-bottom-1`). Both are measured from the element's bottom, so the
     // new offset is the dead space less the overhang each one already has.
+    // 2.0's own offsets are `inset: -3px` on all four sides of the *node*
+    // element, with a 15px radius. Both are wrong for a node whose visible box
+    // is the widget rather than the node body: the element is inset from the
+    // node on each side, so the ring stood proud of the painted box left and
+    // right, and its corners were a different curve. Measured: ring 297-563
+    // against a painted box of 312-548. Both are put back onto the painted box,
+    // keeping 2.0's own three pixels of clearance, and the radius is handed over
+    // per node as a custom property so it can follow the Shape menu.
     return `
 [data-node-id]:has(.sc-label) [data-testid="node-state-outline-overlay"] {
     bottom: ${dead - 3}px !important;
+    left: ${VUE_WIDGET_INSET - 3}px !important;
+    right: ${VUE_WIDGET_INSET - 3}px !important;
+    border-radius: var(--sc-label-ring-radius, 15px) !important;
 }
-[data-node-id]:has(.sc-label) [data-corner="SE"],
+[data-node-id]:has(.sc-label) [data-corner="SE"] {
+    bottom: ${dead - 4}px !important;
+    right: ${VUE_WIDGET_INSET - 4}px !important;
+}
 [data-node-id]:has(.sc-label) [data-corner="SW"] {
     bottom: ${dead - 4}px !important;
+    left: ${VUE_WIDGET_INSET - 4}px !important;
 }
+[data-node-id]:has(.sc-label) [data-corner="NE"] { right: ${VUE_WIDGET_INSET - 4}px !important; }
+[data-node-id]:has(.sc-label) [data-corner="NW"] { left: ${VUE_WIDGET_INSET - 4}px !important; }
 `;
 }
 
@@ -547,6 +575,53 @@ function updateScrollbar(node) {
     thumb.style.transform = `translateY(${Math.round(progress * travel)}px)`;
 }
 
+/**
+ * Set the node's own background without the change being read as the user's.
+ *
+ * This module writes `node.bgcolor` on every render, and the chained accessor
+ * below cannot tell those writes from ComfyUI's color menu by their value
+ * alone, so they are marked.
+ */
+function writeNodeColor(node, value) {
+    node._scWritingColor = true;
+    try {
+        node.bgcolor = value;
+    } finally {
+        node._scWritingColor = false;
+    }
+}
+
+/**
+ * Adopt a color set from ComfyUI's own menu, rather than fighting it.
+ *
+ * Two ways of coloring one node cannot both win, and quietly putting this one's
+ * color back on the next render was the worst of the options available:
+ * ComfyUI's palette appeared to work, and then reverted the moment the node was
+ * deselected and something re-rendered it. Under Nodes 2.0 it never appeared to
+ * work at all, because the node's own surfaces are cleared there and this
+ * element is the only thing painting.
+ *
+ * So the last choice made is the one that stands (Shannon, 2026-09-05): a color
+ * from ComfyUI's menu becomes this label's background, and a color from the
+ * label's own menu replaces whatever ComfyUI's palette had set. "No color"
+ * arrives as `undefined` and maps to this node's own default, which is no
+ * background at all.
+ */
+function watchComfyColor(node) {
+    chainAccessor(node, "bgcolor", function (value) {
+        if (this._scWritingColor) {
+            return;
+        }
+        const chosen = value === undefined || value === null ? TRANSPARENT : String(value);
+        if (this.properties?.[BACKGROUND] === chosen) {
+            return;
+        }
+        this.properties[BACKGROUND] = chosen;
+        render(this);
+        app.graph?.setDirtyCanvas(true, true);
+    });
+}
+
 function render(node) {
     const parts = PARTS.get(node);
     if (!parts) {
@@ -566,6 +641,14 @@ function render(node) {
     text.style.color = style.color;
     text.style.textAlign = style.align;
     paint.style.background = style.background === TRANSPARENT ? "transparent" : style.background;
+
+    // The box follows ComfyUI's own Shape menu, and the selection ring follows
+    // the box. The ring lives on an element the renderer owns, so its radius is
+    // handed over as a custom property rather than written onto it directly.
+    paint.style.borderRadius = paintRadius(node, bodyRadius());
+    parts.root
+        .closest("[data-node-id]")
+        ?.style.setProperty("--sc-label-ring-radius", ringRadius(node));
 
     // Show the label's shape only where there would otherwise be nothing at
     // all to see. Two cases, and no others -- an outline that lingers while a
@@ -596,11 +679,12 @@ function render(node) {
     // The keyword, not "rgba(0,0,0,0)": measured, the legacy renderer paints a
     // solid box for the zero-alpha form and honours the keyword. The two look
     // identical in any color picker and are not interchangeable here.
-    if (vueNodes()) {
-        delete node.bgcolor;
-    } else {
-        node.bgcolor = style.background;
-    }
+    // `undefined`, never `delete`. The property is an own **accessor**, so
+    // deleting it would take this module's own chained setter with it -- and
+    // with it every chance of noticing ComfyUI's color menu. Assigning undefined
+    // is how the renderer itself unsets one: the accessor toggles the property's
+    // enumerability to match, so it drops out of a saved workflow just the same.
+    writeNodeColor(node, vueNodes() ? undefined : style.background);
 
     setPointerThrough(node, editing !== node);
 
@@ -740,7 +824,6 @@ function buildElement(node) {
         left: "0",
         right: "0",
         overflow: "hidden",
-        borderRadius: "6px",
     });
 
     const text = document.createElement("div");
@@ -1288,6 +1371,16 @@ app.registerExtension({
             PARTS.set(this, parts);
             LABELS.add(this);
             const node = this;
+
+            // ComfyUI's Shape and Color menus both write to own accessors on
+            // the instance that never reach `onPropertyChanged`, so there is
+            // nothing else to hook. Chaining keeps their behaviour and adds the
+            // re-render a node painting its own surface needs.
+            chainAccessor(this, "shape", () => {
+                render(node);
+                app.graph?.setDirtyCanvas(true, true);
+            });
+            watchComfyColor(this);
             this.addDOMWidget("sc_label", "custom", parts.root, {
                 serialize: false,
                 // Both matter. The node hands its spare height to widgets via

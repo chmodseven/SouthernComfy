@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from ..constants import NODE_TYPE_LOAD_INPUTS
+
 __all__ = ["SCLoadInputs"]
 
 
@@ -27,7 +29,7 @@ class SCLoadInputs(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="SC_LoadInputs",
+            node_id=NODE_TYPE_LOAD_INPUTS,
             display_name="SC Load Inputs",
             category="SouthernComfy/utils",
             description=(

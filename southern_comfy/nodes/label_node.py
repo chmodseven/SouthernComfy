@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from ..constants import NODE_TYPE_LABEL
+
 __all__ = ["SCLabel"]
 
 
@@ -44,7 +46,7 @@ class SCLabel(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="SC_Label",
+            node_id=NODE_TYPE_LABEL,
             display_name="SC Label",
             category="SouthernComfy/utils",
             description=(

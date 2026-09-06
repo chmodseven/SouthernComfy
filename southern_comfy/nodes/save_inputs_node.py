@@ -11,6 +11,7 @@ import tempfile
 import folder_paths
 from comfy_api.latest import io
 
+from ..constants import NODE_TYPE_SAVE_INPUTS
 from ..run_inputs import capture, finish_run, start_run
 from ..run_stats import current_prompt_id, memory_snapshot, when_finished
 
@@ -69,7 +70,7 @@ class SCSaveInputs(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="SC_SaveInputs",
+            node_id=NODE_TYPE_SAVE_INPUTS,
             display_name="SC Save Inputs",
             category="SouthernComfy/utils",
             description=(

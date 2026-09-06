@@ -12,6 +12,7 @@ from comfy_api.latest import io
 from .label_node import SCLabel
 from .load_inputs_node import SCLoadInputs
 from .save_inputs_node import SCSaveInputs
+from .timer_node import SCTimer
 from .version_node import SCVersion
 from .workflow_checksum_node import SCWorkflowChecksum
 
@@ -21,6 +22,7 @@ NODE_CLASSES: tuple[type[io.ComfyNode], ...] = (
     SCLabel,
     SCLoadInputs,
     SCSaveInputs,
+    SCTimer,
     SCVersion,
     SCWorkflowChecksum,
 )

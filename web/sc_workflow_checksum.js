@@ -30,7 +30,8 @@ const SCOPE_WIDGET = "scope";
 const DISPLAY_WIDGET = "checksum";
 const CHECKSUM_TOOLTIP =
     "Live SHA-256 checksum of the workflow for the selected scope.\n" +
-    "Widen the node to reveal any trailing characters truncated by the ellipsis.";const PENDING = "…";
+    "Widen the node to reveal any trailing characters truncated by the ellipsis.";
+const PENDING = "…";
 const ELLIPSIS = "...";
 const TIMEOUT = 5000; // 5-second safety limit
 

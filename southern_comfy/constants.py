@@ -19,6 +19,7 @@ __all__ = [
     "NODE_TYPE_LABEL",
     "NODE_TYPE_LOAD_INPUTS",
     "NODE_TYPE_SAVE_INPUTS",
+    "NODE_TYPE_TIMER",
     "NODE_TYPE_VERSION",
     "NODE_TYPE_WORKFLOW_CHECKSUM",
     "OBSERVER_NODE_TYPES",
@@ -37,6 +38,7 @@ __all__ = [
 NODE_TYPE_LABEL = "SC_Label"
 NODE_TYPE_LOAD_INPUTS = "SC_LoadInputs"
 NODE_TYPE_SAVE_INPUTS = "SC_SaveInputs"
+NODE_TYPE_TIMER = "SC_Timer"
 NODE_TYPE_VERSION = "SC_Version"
 NODE_TYPE_WORKFLOW_CHECKSUM = "SC_WorkflowChecksum"
 
@@ -46,6 +48,7 @@ PACK_NODE_TYPES: frozenset[str] = frozenset(
         NODE_TYPE_LABEL,
         NODE_TYPE_LOAD_INPUTS,
         NODE_TYPE_SAVE_INPUTS,
+        NODE_TYPE_TIMER,
         NODE_TYPE_VERSION,
         NODE_TYPE_WORKFLOW_CHECKSUM,
     }
@@ -64,6 +67,7 @@ UNRESTORABLE_TYPES: frozenset[str] = OBSERVER_NODE_TYPES | frozenset(
     {
         NODE_TYPE_SAVE_INPUTS,
         NODE_TYPE_LABEL,
+        NODE_TYPE_TIMER,
     }
 )
 

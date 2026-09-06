@@ -18,6 +18,7 @@ All nodes are prefixed **`SC`** in the node search and **Add Node** menu, and li
   - [What these two are for](#what-these-two-are-for)
   - [SC Load Inputs](#sc-load-inputs)
   - [SC Save Inputs](#sc-save-inputs)
+  - [SC Timer](#sc-timer)
   - [SC Version](#sc-version)
   - [SC Workflow Checksum](#sc-workflow-checksum)
 - [Enhancements](#enhancements)
@@ -85,6 +86,7 @@ If the host ComfyUI is too old to provide the V3 node API, the pack loads inertl
 | [**SC Label**](#sc-label) | `SouthernComfy/utils` | Text on the canvas with no title bar and no badge, for annotating a workflow. |
 | [**SC Load Inputs**](#sc-load-inputs) | `SouthernComfy/utils` | Restores the input values of an earlier run into this workflow. |
 | [**SC Save Inputs**](#sc-save-inputs) | `SouthernComfy/utils` | Writes every input value in the workflow to JSON on each run. |
+| [**SC Timer**](#sc-timer) | `SouthernComfy/utils` | A run timer with no title bar and no badge, counting up live and settling on the run's real duration. |
 | [**SC Version**](#sc-version) | `SouthernComfy/utils` | Displays the running ComfyUI version and the SouthernComfy pack version. |
 | [**SC Workflow Checksum**](#sc-workflow-checksum) | `SouthernComfy/utils` | Live checksum of the workflow, over a selectable scope. |
 
@@ -113,7 +115,9 @@ text beyond it scrolls.
 
 **Inputs and outputs** — none. The node never joins the execution graph.
 
-**Appearance** — a new label is **white text with no background at all**, sitting directly on the
+**Appearance** — ComfyUI's own **Shape** and **Colors** menus work on a label, with the selection
+outline following the shape and whichever colour menu you used last winning. A new label is **white
+text with no background at all**, sitting directly on the
 canvas. Right-click it for **SC Label Font Size**, **SC Label Text Color**, **SC Label Background
 Color** and **SC Label Reset Colors** — the color items open a swatch and a hex box at the pointer,
 with **None** for no background at all. Give it a background and the box appears. An empty label
@@ -318,6 +322,68 @@ See [SC Workflow Checksum](#sc-workflow-checksum) for what each scope covers.
 - A run started straight from the API carries no workflow metadata. The file is still written, with
   `resolved` filled in and `nodes` empty.
 - Works under both the legacy renderer and Nodes 2.0.
+
+---
+
+### SC Timer
+
+A **run timer** on the canvas, with no title bar and no badge — a stopwatch that starts itself when
+you press Run and stops on the run's real duration.
+
+It reads `00:00.000` until something runs, counts up in real time while it does, and settles on the
+final time. Beside the reading is a small light saying how the last run finished.
+
+> **Screenshot pending** — to be added.
+
+**The reading** is `MI:SS.fff`, with the milliseconds in a smaller face so the part you are watching
+stays the part you read first. It grows a segment only when a run needs one — `HH:MI:SS.fff` past an
+hour, `DD:HH:MI:SS.fff` past a day — **widening the node to fit**, with the padding either side kept
+the same so it never looks lopsided (155px at the default size, 190 past an hour, 226 past a day,
+and back again). Most timers never see either segment. The digits are drawn in the platform's
+monospace face, so they are all the same width and the numbers do not shuffle as they count.
+
+**The state light** is a spinner while a run is in flight, and a bubble the rest of the time: grey
+for no run yet with this workflow open, green for a run that succeeded, yellow for one you
+cancelled, red for one that failed, and blue for a run whose outcome was lost with the connection to
+ComfyUI. Hover it for a sentence saying which — on a red one that sentence carries the node that
+failed and the error ComfyUI reported. Red also covers the two ways a run can go wrong before it
+properly starts: a prompt ComfyUI **refuses outright** (reading left at `00:00.000`, since nothing
+executed), and one it only **partly accepts** — ComfyUI needs just one valid output, so it drops a
+broken branch, runs the rest, and reports success on what it did. The timer shows that real duration
+in red rather than calling it a success.
+
+**The final time is ComfyUI's own.** When a run starts and ends, the server sends a message stamped
+with its own millisecond clock — the same pair the run history is built from — and the node shows
+the difference between them. It agrees with the `Prompt executed in …` line in the console. Only the
+live count in between is the browser's, measured with a monotonic clock and replaced by the server's
+answer the moment the run ends.
+
+**Inputs and outputs** — none. The node never joins the execution graph.
+
+**Appearance** — right-click for **SC Timer Font Size**, **SC Timer Text Color**, **SC Timer
+Background Color** and **SC Timer Reset Colors**. ComfyUI's own **Shape** and **Colors** menus work
+on it too: the selection outline follows whatever shape you pick, and whichever colour menu you used
+last is the one that stands. The color items open a swatch and a hex box at the
+pointer, with **Default** to follow your theme and, for the background, **None** for no background at
+all. The node **cannot be resized**: its size follows the point size and the clock's current shape,
+so there is nothing a resize could mean.
+
+**Notes**
+
+- **It cannot slow a run down, by construction.** It never executes, so it takes none of the
+  samplers' time; it never polls, so it costs nothing while idle; it updates on animation frames,
+  which the browser drops when they cannot be afforded and stops entirely in a background tab; and it
+  never redraws the canvas while counting. The spinner turns from the same loop, twelve steps to the
+  revolution, so it costs twelve style writes a second and stops dead when the run does.
+- **If ComfyUI goes away mid-run** the timer stops where it was rather than counting on forever, and
+  the light says the result is unknown. If the run survives and reports back, the timer finishes
+  properly with the server's own times.
+- **Nothing about a run is saved with the workflow.** The elapsed time and the outcome describe one
+  session rather than the graph, so they live only in the browser. Only the three appearance
+  properties are stored, hashed as `layout` rather than `inputs`.
+- **`SC Load Inputs` never rewrites it**, and more than one timer on a canvas is fine — they all show
+  the same run.
+- Works under both the legacy renderer and Nodes 2.0. Neither draws a header for it.
 
 ---
 

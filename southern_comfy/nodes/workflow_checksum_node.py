@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
+from ..constants import NODE_TYPE_WORKFLOW_CHECKSUM
 from ..workflow_hash import CHECKSUM_SCOPES, compute_checksum
 
 __all__ = ["SCWorkflowChecksum"]
@@ -49,7 +50,7 @@ class SCWorkflowChecksum(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="SC_WorkflowChecksum",
+            node_id=NODE_TYPE_WORKFLOW_CHECKSUM,
             display_name="SC Workflow Checksum",
             category="SouthernComfy/utils",
             description=(
