@@ -32,7 +32,7 @@
 
 // Served from /extensions/SouthernComfy/, so "../../" is the ComfyUI web root.
 import { app } from "../../scripts/app.js";
-import { bodyRadius, chainAccessor, paintRadius, ringRadius } from "./sc_ui.js";
+import { bodyRadius, canvasHost, chainAccessor, clearNodeBody, paintRadius, ringRadius } from "./sc_ui.js";
 
 const NODE_TYPE = "SC_Label";
 
@@ -121,6 +121,9 @@ const NODE_CHROME = 18;
  * rules need.
  */
 const VUE_WIDGET_INSET = 12;
+
+/** Frames to wait for the canvas container before settling for the document. */
+const WHEEL_HOST_TRIES = 20;
 
 /** Width of the label's own scrollbar, and of the thumb inside it. */
 const BAR_WIDTH = 10;
@@ -676,15 +679,28 @@ function render(node) {
     // bgcolor. 2.0 does not need one, because the label paints its own
     // background and the stylesheet clears the node's surfaces, so the property
     // is simply left off there.
-    // The keyword, not "rgba(0,0,0,0)": measured, the legacy renderer paints a
-    // solid box for the zero-alpha form and honours the keyword. The two look
-    // identical in any color picker and are not interchangeable here.
     // `undefined`, never `delete`. The property is an own **accessor**, so
     // deleting it would take this module's own chained setter with it -- and
     // with it every chance of noticing ComfyUI's color menu. Assigning undefined
     // is how the renderer itself unsets one: the accessor toggles the property's
     // enumerability to match, so it drops out of a saved workflow just the same.
-    writeNodeColor(node, vueNodes() ? undefined : style.background);
+    //
+    // And `undefined` for a transparent label too, rather than the keyword. The
+    // keyword did hide the body, but only by being a color ComfyUI cannot parse,
+    // which put `Unsupported color format in color palette: transparent` in the
+    // console every time one was drawn or selected. `clearNodeBody` hides it by
+    // saying so instead; the keyword stays as the fallback for the day that
+    // getter is renamed.
+    const bodyHidden = clearNodeBody(node, style.background === TRANSPARENT);
+    let background;
+    if (vueNodes()) {
+        background = undefined;
+    } else if (style.background !== TRANSPARENT) {
+        background = style.background;
+    } else {
+        background = bodyHidden ? undefined : TRANSPARENT;
+    }
+    writeNodeColor(node, background);
 
     setPointerThrough(node, editing !== node);
 
@@ -1332,6 +1348,78 @@ function chooseFontSize(node, event, parent) {
     return false;
 }
 
+/**
+ * Scrolling a label that is showing less than it holds.
+ *
+ * Without this the wheel reaches the canvas and zooms instead. It hit-tests by
+ * geometry rather than by event target, because the label deliberately does not
+ * receive pointer events and the two renderers deliver the event by different
+ * routes.
+ */
+function onWheel(event) {
+    const node = labelAt(event.clientX, event.clientY);
+    const parts = node && PARTS.get(node);
+    if (!parts || parts.text.scrollHeight <= parts.text.clientHeight) {
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    parts.text.scrollTop += event.deltaY;
+    updateScrollbar(node);
+}
+
+/**
+ * Listen on the canvas container rather than the document.
+ *
+ * A non-passive wheel listener on the document is a documented Chrome
+ * performance violation -- see `canvasHost`. The container is mounted well
+ * before an extension's setup hook runs, but a few frames of patience cost
+ * nothing, and the document is a better last resort than a label that cannot
+ * be scrolled at all.
+ */
+function attachWheel(attempt) {
+    const host = canvasHost();
+    if (!host && attempt < WHEEL_HOST_TRIES) {
+        requestAnimationFrame(() => attachWheel(attempt + 1));
+        return;
+    }
+    (host ?? document).addEventListener("wheel", onWheel, { capture: true, passive: false });
+}
+
+/**
+ * Re-render every label when the renderer is switched.
+ *
+ * Almost everything this module decides -- which box paints the background,
+ * whether the node carries a `bgcolor` at all, where the selection ring goes --
+ * is answered from `vueNodes()`, and without this those answers stayed on
+ * whatever was true when the label was last drawn. Going from Nodes 2.0 back to
+ * legacy is where it showed: the node arrived carrying no background, so the
+ * legacy renderer painted it its ordinary grey, and a label that should have
+ * been invisible sat in a box until something happened to re-render it.
+ *
+ * The flip settles asynchronously -- a render in the same tick still reads the
+ * old value -- hence the later passes rather than a single one.
+ */
+function onRendererFlip() {
+    renderAll();
+    setTimeout(renderAll, 100);
+    setTimeout(renderAll, 400);
+}
+
+/** Re-render and re-place every label that is actually in the graph. */
+function renderAll() {
+    for (const node of LABELS) {
+        if (!node.graph) {
+            continue;
+        }
+        render(node);
+        // `arrange` is what moves the DOM widget's container, and it is nothing
+        // without a draw -- the numbers only reach the DOM through one.
+        node.arrange?.();
+    }
+    app.graph?.setDirtyCanvas(true, true);
+}
+
 app.registerExtension({
     name: "SouthernComfy.Label",
 
@@ -1609,10 +1697,11 @@ app.registerExtension({
             true,
         );
 
-        // The next two hit-test by geometry rather than by event target,
-        // because the label deliberately does not receive pointer events, and
-        // because the renderers deliver these events by different routes.
-
+        // This and the wheel handler below hit-test by geometry rather than by
+        // event target, because the label deliberately does not receive pointer
+        // events, and because the renderers deliver these events by different
+        // routes.
+        //
         // Nodes 2.0 draws nodes as DOM and never calls the canvas's onDblClick.
         document.addEventListener(
             "dblclick",
@@ -1627,22 +1716,9 @@ app.registerExtension({
             true,
         );
 
-        // Scrolling a label that is showing less than it holds. Without this the
-        // wheel reaches the canvas and zooms instead.
-        document.addEventListener(
-            "wheel",
-            (event) => {
-                const node = labelAt(event.clientX, event.clientY);
-                const parts = node && PARTS.get(node);
-                if (!parts || parts.text.scrollHeight <= parts.text.clientHeight) {
-                    return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                parts.text.scrollTop += event.deltaY;
-                updateScrollbar(node);
-            },
-            { capture: true, passive: false },
-        );
+        // Scrolling a label that is showing less than it holds, and the
+        // renderer flip, which changes every answer this module renders from.
+        attachWheel(0);
+        app.ui?.settings?.addEventListener?.("Comfy.VueNodes.Enabled.change", onRendererFlip);
     },
 });

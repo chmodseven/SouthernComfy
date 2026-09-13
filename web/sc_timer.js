@@ -61,19 +61,7 @@
 // Served from /extensions/SouthernComfy/, so "../../" is the ComfyUI web root.
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
-import {
-    bodyRadius,
-    chainAccessor,
-    closePanel,
-    fontSizeSubmenu,
-    installStyles,
-    openColorPanel,
-    openFontSizePanel,
-    paintRadius,
-    ringRadius,
-    trackPointer,
-    vueNodes,
-} from "./sc_ui.js";
+import { bodyRadius, chainAccessor, clearNodeBody, closePanel, fontSizeSubmenu, installStyles, openColorPanel, openFontSizePanel, paintRadius, ringRadius, trackPointer, vueNodes } from "./sc_ui.js";
 
 const NODE_TYPE = "SC_Timer";
 
@@ -827,6 +815,13 @@ function render(node) {
     // 2.0 owns, so the value is handed over as a custom property the stylesheet
     // reads rather than written onto that element directly.
     parts.root.closest("[data-node-id]")?.style.setProperty("--sc-timer-ring-radius", ringRadius(node));
+    // A background of "None" has to hide the node body the legacy renderer
+    // draws underneath. Saying so is not the same as setting `bgcolor` to the
+    // keyword: that worked only by being a color ComfyUI cannot parse, and put
+    // `Unsupported color format in color palette: transparent` in the console
+    // each time the node was drawn or selected. See clearNodeBody.
+    const bodyHidden = clearNodeBody(node, background === TRANSPARENT);
+
     if (vue) {
         // `undefined`, never `delete`. The property is an own **accessor** --
         // deleting it would take this module's own chained setter with it, and
@@ -846,7 +841,9 @@ function render(node) {
     } else {
         paint.style.background = "transparent";
         paint.style.outline = "none";
-        writeNodeColor(node, background === DEFAULT ? undefined : background);
+        // The keyword stays as the fallback, for the day that getter is renamed.
+        const cleared = background === DEFAULT || (background === TRANSPARENT && bodyHidden);
+        writeNodeColor(node, cleared ? undefined : background);
     }
 
     // The floor, stated where Nodes 2.0 will look for it: that renderer does

@@ -441,6 +441,76 @@ export function bodyRadius() {
 }
 
 /**
+ * The element both renderers draw inside, for a listener that must not sit on
+ * the document.
+ *
+ * Chrome reports every non-passive `wheel` or `touchstart` listener added to
+ * the window, the document, its root element or its body -- "Added non-passive
+ * event listener to a scroll-blocking 'wheel' event" -- because such a listener
+ * can hold up scrolling for the whole page. A listener on an ordinary element
+ * is not reported and does not carry that cost. `#graph-canvas-container` is
+ * the nearest ancestor of both the canvas and the DOM widget layer, so it sees
+ * the same events under either renderer.
+ */
+export function canvasHost() {
+    return (
+        document.getElementById("graph-canvas-container") ??
+        document.getElementById("graph-canvas")?.parentElement ??
+        null
+    );
+}
+
+/**
+ * Stop the legacy renderer painting a node body, without lying to its color code.
+ *
+ * A node that paints its own background needs the one underneath to disappear,
+ * and the obvious way to ask -- `node.bgcolor = "transparent"` -- works only by
+ * accident. `renderingBgColor` runs the value through `adjustColor`, and
+ * *anything it can parse* has its alpha replaced by the `Comfy.Node.Opacity`
+ * setting: `rgba(0,0,0,0)` and `#00000000` both come back fully opaque. The
+ * keyword survives only because it fails to parse, and failing to parse is
+ * exactly what puts `Unsupported color format in color palette: transparent` in
+ * the console -- once from the draw itself, and again from the color toolbar,
+ * which reads the same property.
+ *
+ * So the property is left unset, which is the truth (this node has no ComfyUI
+ * color), and the rendering getter is shadowed instead. Nothing in LiteGraph
+ * assigns to it; a setter is provided anyway, because a third-party extension
+ * that did would otherwise get a TypeError from an accessor with no setter.
+ *
+ * Returns false if the getter cannot be found, so a caller can fall back to the
+ * keyword rather than silently showing a grey box.
+ */
+export function clearNodeBody(node, cleared) {
+    node._scClearBody = !!cleared;
+    if (node._scBodyHooked) {
+        return true;
+    }
+    let base = null;
+    for (let level = Object.getPrototypeOf(node); level && !base; level = Object.getPrototypeOf(level)) {
+        base = Object.getOwnPropertyDescriptor(level, "renderingBgColor");
+    }
+    if (!base?.get) {
+        return false;
+    }
+    let override;
+    Object.defineProperty(node, "renderingBgColor", {
+        configurable: true,
+        get() {
+            if (override !== undefined) {
+                return override;
+            }
+            return this._scClearBody ? "transparent" : base.get.call(this);
+        },
+        set(value) {
+            override = value;
+        },
+    });
+    node._scBodyHooked = true;
+    return true;
+}
+
+/**
  * Add a step to a property a node already owns an accessor for.
  *
  * Every LiteGraph node instance carries own accessors for `shape`, `color` and
